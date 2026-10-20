@@ -1,0 +1,29 @@
+[
+  {
+    "title": "Stress and rest reflection",
+    "questions": [
+      "I could break my workload into manageable steps.",
+      "I made time for a comfortable break.",
+      "I had enough rest to manage my day.",
+      "I could ask for help when tasks felt too much."
+    ]
+  },
+  {
+    "title": "Worry and calm reflection",
+    "questions": [
+      "I could bring my attention back to the present.",
+      "I found a comfortable way to settle after feeling worried.",
+      "I could continue with one manageable daily activity.",
+      "I felt able to talk to someone I trust."
+    ]
+  },
+  {
+    "title": "Connection and wellbeing reflection",
+    "questions": [
+      "I felt connected to someone I trust.",
+      "I made time for something I enjoy.",
+      "I treated myself with patience when things were difficult.",
+      "I felt able to ask for the support I need."
+    ]
+  }
+]

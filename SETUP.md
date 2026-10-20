@@ -70,6 +70,22 @@ The API terms currently restrict API clients directed toward or likely to be acc
 
 ### Personal emotional conversations
 
+Update (20 October 2026): the message composer and bounded conversation endpoint
+are now implemented, but disabled by default. Keep
+`LUMI_PERSONAL_CHAT_ENABLED=false` for the current unpaid Gemini project.
+Once a suitable paid-service project and privacy disclosures are in place, set
+this server-only variable to `true` and redeploy. The browser reads the capability
+from `/api?kind=ai-config`; the server independently rejects personal chat while
+disabled. No key or provider credential is exposed by that endpoint.
+
+Enabled chat accepts at most 2,000 characters per message and six recent exchanges.
+It sends only those messages, not saved records or profile details. Conversation
+text stays in page memory, clears on reload/logout, and is not stored in the app
+database. Google has its own retention practices. Authentication, consent, and
+the existing daily quota remain required. Local preview responses are examples.
+The earlier paragraph below describes the rationale for the default free mode;
+the formerly deferred endpoint is now implemented behind this switch.
+
 This package deliberately does not enable free-text emotional disclosure to the free API. For a future personal-chat release, choose an appropriate paid-service arrangement or another suitable provider, obtain institutional privacy/security review, establish age eligibility, define consent and retention, implement safeguarding and human escalation procedures, then add a separately reviewed free-text endpoint. Paid service alone is not clinical validation. The existing mood and counseling features do not require Gemini.
 
 ## 5. Deploy to Vercel
@@ -102,7 +118,56 @@ Set these Vercel environment variables:
 
 Gemini API keys are not database settings. The Supabase migration creates `private.ai_usage` for per-user daily request counts only; it intentionally stores no API credentials or prompts. Do not add a Gemini key to SQL, Supabase tables, or SQL migrations.
 
+## Private counseling staff sign-in
+
+Open `/#staff` for the private staff form. It accepts a username and password,
+with no public staff registration. `STAFF_LOGIN_USERNAME` and `STAFF_LOGIN_EMAIL`
+map the username to its Supabase Auth account on the server. Supabase verifies
+the password, and the server checks the persisted profile role before returning
+the user's ordinary session. Passwords and service keys are not in browser code.
+
+The designated operator account now has the `admin` role for account-role,
+assessment, resource, and system-report management. Separate staff accounts can
+be assigned the `counselor` role, which manages appointment requests and resources
+without site-wide role administration. Neither role can read students' private
+moods or reflections through the app. The dashboard supports active/all/status
+filters, manual refresh, confirmation, completion, and cancellation. Database
+permissions remain the authority; knowing the staff URL does not grant access.
+
+`scripts/provision-staff.mjs` is a trusted, one-time provisioning utility, not a
+public API. It requires the service-role key and temporary
+`STAFF_BOOTSTRAP_PASSWORD` in its execution environment. It creates a marked Auth
+account and verifies its counselor profile, refuses to take over an unrelated
+existing account, and never resets an existing password. Remove the temporary
+password after provisioning and redeploy without it. Normal builds do not run
+the utility. No account password should be committed.
+
 ## 6. End-to-end flows
+
+### Polished features and public configuration
+
+- The homepage recommends guided resources using the user's own latest mood and
+  reflection in browser memory. No personal records are forwarded to Gemini.
+- Students select a reflection template; PostgreSQL recalculates its score and
+  stores a question snapshot. Administrators can create, edit, and delete multiple
+  templates. These are non-diagnostic custom reflections, not clinical screeners.
+- `/api?kind=reports` checks the authenticated profile role and returns exact
+  aggregate service counts. It uses the user's token and never queries private
+  moods or assessment answers. Follow-up indicators mean requests pending more
+  than 48 hours, not a clinical risk score.
+- Public pages are available at `/#help`, `/#privacy`, and `/#terms`.
+- `/api?kind=public-config` exposes only the explicitly public operator/contact
+  fields listed in `.env.example`. Set these in Vercel and redeploy when verified
+  school contact details or retention practices change.
+- Retention text describes current behavior: records remain until individual
+  deletion, account deletion, or an operator-handled request. There is no automatic
+  age-based purge. Do not promise a scheduled purge until one is implemented.
+- School office hours and telephone details are not supplied. The app uses its
+  appointment workflow and identifies that limitation. Philippines crisis contact
+  details were retrieved from the connected helpline directory on 21 October 2026.
+- Educational materials link to WHO and NHS, including video and audio guides.
+- The free Gemini mode is intentionally topic-only, as requested. There is no
+  inactive message box suggesting personal chat is available.
 
 - Registration → policy/adult confirmation → email confirmation → login → Auth session → Vercel Python Function validates the user token → profile and personal data loaded through RLS.
 - Mood → choose reaction/intensity/note → upsert one record per local date → history/chart → delete.

@@ -47,14 +47,14 @@ const moods = [
 ];
 const moodIcon = (name) => {
   const faces = {
-    happy: '<path d="M7.5 14c1.1 1.5 2.6 2.3 4.5 2.3s3.4-.8 4.5-2.3"/>',
-    neutral: '<path d="M8 15h8"/>',
-    sad: '<path d="M7.5 16.2c1.1-1.5 2.6-2.3 4.5-2.3s3.4.8 4.5 2.3"/>',
-    anxious: '<path d="M7.5 15c1-.8 1.8-.8 2.8 0s1.9.8 2.9 0 1.9-.8 2.8 0"/>',
-    angry:
-      '<path d="m7.8 9.2 3.1 1.5m5.3-1.5-3.1 1.5m-5.1 5.1c1.1-1.4 2.5-2.1 4-2.1s2.9.7 4 2.1"/>',
+    happy: "M7.5 14c1.1 1.5 2.6 2.3 4.5 2.3s3.4-.8 4.5-2.3",
+    neutral: "M8 15h8",
+    sad: "M7.5 16.2c1.1-1.5 2.6-2.3 4.5-2.3s3.4.8 4.5 2.3",
+    anxious: "M7.5 15c1-.8 1.8-.8 2.8 0s1.9.8 2.9 0 1.9-.8 2.8 0",
+    angry: "m7.8 8.2 3.1 1.5m5.3-1.5-3.1 1.5m-5.1 6.4c1.1-1.4 2.5-2.1 4-2.1s2.9.7 4 2.1",
   };
-  return `<svg class="mood-face mood-face-${name}" viewBox="0 0 24 24" aria-hidden="true"><circle class="mood-face-bg" cx="12" cy="12" r="10"/><path class="mood-face-features" d="M8.5 9.5h.01m7 0h.01${faces[name] || faces.neutral}"/></svg>`;
+  const mood = Object.hasOwn(faces, name) ? name : "neutral";
+  return `<svg class="mood-face mood-face-${mood}" viewBox="0 0 24 24" aria-hidden="true"><circle class="mood-face-bg" cx="12" cy="12" r="10"/><path class="mood-face-features" d="M8.5 10.5h.01m7 0h.01 ${faces[mood]}"/></svg>`;
 };
 let session = null,
   authMode = "login";
@@ -71,7 +71,18 @@ let state = {
   resources: [],
   users: [],
   results: [],
+  staffFilter: "active",
+  assessmentId: "",
+  editAssessmentId: "",
+  publicConfig: {},
+  report: null,
+  reportError: "",
   messages: [],
+  aiPersonalChat: !live,
+  aiConsent: false,
+  chatBusy: false,
+  chatDraft: "",
+  chatEpoch: 0,
   selected: null,
 };
 const resources = [
@@ -119,6 +130,11 @@ const resources = [
     icon: "book",
   },
 ];
+resources.push(
+  { id:"contacts", title:"Find human support", category:"Support directory", icon:"shield", body:"Contact the guidance team or find verified Philippines crisis support. Choose the service that fits what you need." },
+  { id:"videos", title:"Watch practical wellbeing guides", category:"Videos and learning", icon:"book", body:"Explore NHS video guides with practical strategies for everyday worries. These educational materials are optional and do not replace professional care.", url:"https://www.nhs.uk/every-mind-matters/mental-wellbeing-tips/self-help-cbt-techniques/" },
+  { id:"audio", title:"Listen to a guided pause", category:"Audio and relaxation", icon:"wind", body:"Choose an NHS audio guide about relaxation, sleep, or everyday wellbeing. Listen at a comfortable volume and stop whenever you wish.", url:"https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/mental-wellbeing-audio-guides/" }
+);
 const questions = [
   "I had enough energy for everyday tasks.",
   "I felt able to manage my study workload.",
@@ -191,6 +207,11 @@ async function refresh() {
   });
   if (state.role === "admin")
     state.users = await db("profiles", "?order=created_at.desc");
+  state.report = null;
+  if (["admin", "counselor"].includes(state.role)) {
+    try { state.report = await request("/api?kind=reports"); state.reportError = ""; }
+    catch (error) { state.reportError = error.message; }
+  }
 }
 async function ensureSession() {
   if (session?.expires_at && session.expires_at < Date.now() / 1000 + 90) {
@@ -202,16 +223,28 @@ async function ensureSession() {
   }
 }
 function setSession(s) {
+  if (!s || (session?.user?.id && session.user.id !== s.user?.id)) {
+    state.messages = [];
+    state.report = null;
+    state.users = [];
+    state.chatDraft = "";
+    state.aiConsent = false;
+    state.chatEpoch++;
+    state.chatBusy = false;
+  }
+  if (s && !s.expires_at && s.expires_in) s.expires_at = Math.floor(Date.now() / 1000) + s.expires_in;
   session = s;
   if (s) sessionStorage.setItem("stillwell-session", JSON.stringify(s));
   else sessionStorage.removeItem("stillwell-session");
 }
 function modal(title, body) {
+  window.ResourceActivities?.stop();
   $("#modal").innerHTML =
-    `<button class="close" data-action="close" aria-label="Close dialog">×</button><h2>${title}</h2>${body}`;
+    `<button class="close" aria-label="Close activity or dialog" data-action="close" aria-label="Close dialog">×</button><h2>${title}</h2>${body}`;
   $("#modal").showModal();
 }
 function navigate(p) {
+  if ($("#modal").open) $("#modal").close();
   state.page = p;
   render();
   window.scrollTo(0, 0);
@@ -220,6 +253,8 @@ document.addEventListener("click", (e) => {
   const button = e.target.closest("[data-auth-mode]");
   if (!button) return;
   authMode = button.dataset.authMode;
+  state.page = "auth";
+  history.replaceState(null, "", location.pathname + location.search + (authMode === "staff" ? "#staff" : ""));
   render();
 });
 function nav(p, n, label) {
@@ -256,7 +291,7 @@ function home() {
       `Welcome back, ${esc(state.profile.display_name)}.`,
       "Take a breath. You’re right where you need to be.",
     ) +
-    `<div class="dashboard"><div class="stack"><section class="card hero"><div><span class="eyebrow">YOUR PACE. YOUR JOURNEY.</span><h2>A small check-in.<br>A kinder day.</h2><p>You don’t need to have it all figured out.<br>Let’s start with how you’re feeling today.</p><button class="button" data-page="mood">Check in with yourself ${icon("arrow")}</button></div>${mascot(true)}</section><section class="card"><div class="card-head"><h2>How are you feeling today?</h2><span class="muted" style="font-size:11px">Just for you</span></div><small>Every feeling is welcome here.</small>${moodButtons()}</section><section><div class="card-head"><h2>A little care goes a long way</h2><button class="text-link" data-page="resources">Explore all ${icon("arrow")}</button></div><div class="tiles"><button class="tile" data-resource="breathing"><span class="iconbox">${icon("wind")}</span><div><h3>Pause & breathe</h3><p>A gentle moment to reset.</p><small>2 min · Mindfulness</small></div></button><button class="tile" data-page="assessment"><span class="iconbox mint">${icon("check")}</span><div><h3>Understand yourself</h3><p>A little space for reflection.</p><small>3 min · Self check-in</small></div></button><button class="tile" data-resource="study"><span class="iconbox peach">${icon("book")}</span><div><h3>Find your balance</h3><p>Make study time feel lighter.</p><small>4 min · Student life</small></div></button></div></section><section class="card"><div class="card-head"><h2>Your recent check-ins</h2><button class="text-link" data-page="mood">View history ${icon("arrow")}</button></div>${chart()}</section></div><aside class="stack right-column"><section class="card chat-card"><span class="chip">MEET YOUR WELLBEING COMPANION</span>${mascot()}<h2>A little support from Lumi</h2><p>A gentle place to pause, explore self-care, and find your next small step.</p><button class="button" data-page="chat">Let’s talk ${icon("chat")}</button><p style="font-size:10px;margin-bottom:0">AI support, never a replacement for human care.</p></section><section class="card"><div class="card-head"><h2>Your support circle</h2>${icon("calendar")}</div><small>Make space for a conversation.</small><div class="mini-calendar">${["M", "T", "W", "T", "F", "S", "S"].map((x) => `<span>${x}</span>`).join("")}${Array.from(
+    `<div class="dashboard"><div class="stack"><section class="card hero"><div><span class="eyebrow">YOUR PACE. YOUR JOURNEY.</span><h2>A small check-in.<br>A kinder day.</h2><p>You don’t need to have it all figured out.<br>Let’s start with how you’re feeling today.</p><button class="button" data-page="mood">Check in with yourself ${icon("arrow")}</button></div>${mascot(true)}</section><section class="card"><div class="card-head"><h2>How are you feeling today?</h2><span class="muted" style="font-size:11px">Just for you</span></div><small>Every feeling is welcome here.</small>${moodButtons()}</section>${Wellbeing.suggestions()}<section><div class="card-head"><h2>A little care goes a long way</h2><button class="text-link" data-page="resources">Explore all ${icon("arrow")}</button></div><div class="tiles"><button class="tile" data-resource="breathing"><span class="iconbox">${icon("wind")}</span><div><h3>Pause & breathe</h3><p>A gentle moment to reset.</p><small>2 min · Mindfulness</small></div></button><button class="tile" data-page="assessment"><span class="iconbox mint">${icon("check")}</span><div><h3>Understand yourself</h3><p>A little space for reflection.</p><small>3 min · Self check-in</small></div></button><button class="tile" data-resource="study"><span class="iconbox peach">${icon("book")}</span><div><h3>Find your balance</h3><p>Make study time feel lighter.</p><small>4 min · Student life</small></div></button></div></section><section class="card"><div class="card-head"><h2>Your recent check-ins</h2><button class="text-link" data-page="mood">View history ${icon("arrow")}</button></div>${chart()}</section></div><aside class="stack right-column"><section class="card chat-card"><span class="chip">MEET YOUR WELLBEING COMPANION</span>${mascot()}<h2>A little support from Lumi</h2><p>A gentle place to pause, explore self-care, and find your next small step.</p><button class="button" data-page="chat">Let’s talk ${icon("chat")}</button><p style="font-size:10px;margin-bottom:0">AI support, never a replacement for human care.</p></section><section class="card"><div class="card-head"><h2>Your support circle</h2>${icon("calendar")}</div><small>Make space for a conversation.</small><div class="mini-calendar">${["M", "T", "W", "T", "F", "S", "S"].map((x) => `<span>${x}</span>`).join("")}${Array.from(
       { length: 7 },
       (_, i) => {
         let d = new Date();
@@ -276,11 +311,11 @@ function moodView() {
       "Your daily check-in",
       "A feeling is information. It doesn’t define you.",
     ) +
-    `<div class="two-col"><section class="card"><h2>What feels closest today?</h2>${moodButtons()}<form id="mood-form"><label class="field">How strong is this feeling?<select name="intensity">${[1, 2, 3, 4, 5].map((x) => `<option value="${x}" ${x === 3 ? "selected" : ""}>${x} — ${["Very gentle", "Gentle", "Moderate", "Strong", "Very strong"][x - 1]}</option>`).join("")}</select></label><label class="field">A private note (optional)<textarea name="note" maxlength="1000" placeholder="What’s been on your mind?"></textarea></label><p class="muted">Your mood and note are private. They are not automatically shared with a counselor or sent to AI.</p><button class="button">Save today’s check-in</button></form></section><section class="card"><h2>Your mood history</h2>${chart()}${state.moods.map((m) => `<div class="list-item"><div class="row spread"><strong class="mood-history-label">${moodIcon(moods.find((x) => x[1] === m.mood)?.[0] || "neutral")}${esc(m.mood)}</strong><small>${esc(m.entry_date)}</small></div><p>${esc(m.note || "No note added.")}</p><button class="text-link" data-delete-mood="${esc(m.id)}">Delete entry</button></div>`).join("")}</section></div>`
+    `<div class="two-col"><section class="card"><h2>What feels closest today?</h2>${moodButtons()}<form id="mood-form"><label class="field">How strong is this feeling?<select name="intensity">${[1, 2, 3, 4, 5].map((x) => `<option value="${x}" ${x === 3 ? "selected" : ""}>${x} — ${["Very gentle", "Gentle", "Moderate", "Strong", "Very strong"][x - 1]}</option>`).join("")}</select></label><label class="field">A private note (optional)<textarea name="note" maxlength="1000" placeholder="What’s been on your mind?"></textarea></label><p class="muted">Your mood and note are private. They are not automatically shared with a counselor or sent to AI.</p><label class="urgent-choice"><input name="urgent" type="checkbox"> I need urgent support right now</label><p class="muted">This opens support information on your device. It does not alert anyone.</p><button class="button">Save today’s check-in</button></form></section><section class="card"><h2>Your mood history</h2>${chart()}${Wellbeing.moodSummary()}${state.moods.map((m) => `<div class="list-item"><div class="row spread"><strong class="mood-history-label">${moodIcon(moods.find((x) => x[1] === m.mood)?.[0] || "neutral")}${esc(m.mood)}</strong><small>${esc(m.entry_date)}</small></div><p>${esc(m.note || "No note added.")}</p><button class="text-link" data-delete-mood="${esc(m.id)}">Delete entry</button></div>`).join("")}</section></div>`
   );
 }
 function assessmentView() {
-  const a = state.assessments[0],
+  const a = Wellbeing.selectedAssessment(),
     qs = a?.questions || questions;
   return (
     heading(
@@ -288,7 +323,7 @@ function assessmentView() {
       "How have things felt lately?",
       "A personal reflection, not a medical assessment or diagnosis.",
     ) +
-    `<div class="two-col"><section class="card"><h2>${esc(a?.title || "Everyday wellbeing reflection")}</h2><div class="notice">Think about the past seven days. This custom reflection is not a validated screening instrument and has no diagnostic cutoffs.</div><form id="assessment-form">${qs.map((q, i) => `<label class="assessment-q" style="display:block">${i + 1}. ${esc(q)}<select name="q${i}" required><option value="">Choose an answer</option><option value="0">Rarely</option><option value="1">Sometimes</option><option value="2">Often</option><option value="3">Most days</option></select></label>`).join("")}<button class="button" style="margin-top:20px">See my reflection</button></form></section><section class="card"><h2>Your reflections</h2>${state.results.length ? state.results.map((r) => `<div class="list-item"><small>${new Date(r.created_at).toLocaleDateString()}</small><h3>${r.score} / ${r.max_score} reflection points</h3><p>This only summarizes your selected answers. Consider what you would like more support with.</p><button class="text-link" data-delete-result="${esc(r.id)}">Delete reflection</button></div>`).join("") : '<div class="empty">Your reflections will appear here.</div>'}<button class="button secondary" data-page="appointments">Talk it through with a counselor</button></section></div>`
+    `<div class="two-col"><section class="card"><label class="field">Choose a reflection<select id="assessment-select">${state.assessments.map(item=>`<option value="${esc(item.id)}" ${item.id===a?.id?"selected":""}>${esc(item.title)}</option>`).join("")}</select></label><h2>${esc(a?.title || "Everyday wellbeing reflection")}</h2><div class="notice">Think about the past seven days. This custom reflection is not a validated screening instrument and has no diagnostic cutoffs.</div><form id="assessment-form">${qs.map((q, i) => `<label class="assessment-q" style="display:block">${i + 1}. ${esc(q)}<select name="q${i}" required><option value="">Choose an answer</option><option value="0">Rarely</option><option value="1">Sometimes</option><option value="2">Often</option><option value="3">Most days</option></select></label>`).join("")}<button class="button" style="margin-top:20px">See my reflection</button></form></section><section class="card"><h2>Your reflections</h2>${state.results.length ? state.results.map((r) => `<div class="list-item"><small>${new Date(r.created_at).toLocaleDateString()}</small><h3>${esc(state.assessments.find(a=>a.id===r.assessment_id)?.title || "Saved reflection")}</h3><strong>${r.score} / ${r.max_score} reflection points</strong><p>This only summarizes your selected answers. Consider what you would like more support with.</p><button class="text-link" data-delete-result="${esc(r.id)}">Delete reflection</button></div>`).join("") : '<div class="empty">Your reflections will appear here.</div>'}<button class="button secondary" data-page="appointments">Talk it through with a counselor</button></section></div>`
   );
 }
 function chatView() {
@@ -298,7 +333,7 @@ function chatView() {
       "Meet Lumi",
       "Small ideas for everyday care, at your pace.",
     ) +
-    `<div class="two-col"><section class="card"><div class="row">${mascot()}<div><h2>Hi, I’m Lumi.</h2><p>I can help you explore general wellbeing ideas. I’m an AI companion, not a counselor.</p></div></div><div class="notice">Privacy-first free mode: choose a general topic. Personal notes, mood history, names, and assessment results are never sent to Gemini. Free-text personal chat requires a reviewed paid-service configuration.</div><label><input id="ai-consent" type="checkbox"> I’m 18 or older and agree to send only the selected general topic to Google for an AI response. <button class="text-link" data-page="privacy">Read the privacy policy</button></label><div class="chat-log" role="log" aria-live="polite">${state.messages.length ? state.messages.map((m) => `<div class="bubble ${m.role === "user" ? "user" : ""}">${esc(m.text)}</div>`).join("") : '<div class="bubble">What would you like to make a little space for today?</div>'}</div><div class="topic-buttons">${["A breathing pause", "Study and rest balance", "Everyday self-care", "Reaching out for support"].map((s, i) => `<button data-topic="${i}">${s} ${icon("arrow")}</button>`).join("")}</div><div class="divider"></div><button class="text-link" data-action="clear-chat">Clear this conversation</button></section><section class="stack"><div class="card mint"><h2>Human support matters</h2><p>If you need to talk about personal emotional concerns, a qualified counselor can offer support that an AI cannot.</p><button class="button secondary" data-page="appointments">Request counseling</button></div><div class="card"><h2>Your conversation, your choice</h2><p>Messages here stay in this page’s memory. Refresh or clear the conversation to remove them. Google processes AI requests under its own terms.</p><p>In preview mode, Lumi uses clearly labeled example replies.</p><button class="text-link" data-page="help">I need urgent support ${icon("arrow")}</button></div></section></div>`
+    `<div class="two-col"><section class="card"><div class="row">${mascot()}<div><h2>Hi, I’m Lumi.</h2><p>I can help you explore general wellbeing ideas. I’m an AI companion, not a counselor.</p></div></div><div class="notice">${state.aiPersonalChat ? "Your message and the last six exchanges are sent to Google to help Lumi follow the conversation. Your saved mood notes, profile, and assessment results are not included. Avoid identifying details." : "Choose a general topic for practical wellbeing ideas. This mode offers general wellbeing education. Your saved notes and assessment results stay out of AI requests."}</div><label><input id="ai-consent" type="checkbox" ${state.aiConsent ? "checked" : ""} ${state.chatBusy ? "disabled" : ""}> I’m 18 or older and agree to send ${state.aiPersonalChat ? "my messages and recent conversation" : "the selected general topic"} to Google for an AI response. <button class="text-link" data-page="privacy">Read the privacy policy</button></label><div class="chat-log" role="log" aria-live="polite">${state.messages.length ? state.messages.map((m) => `<div class="bubble ${m.role === "user" ? "user" : ""}">${esc(m.text)}</div>`).join("") : '<div class="bubble">What would you like to make a little space for today?</div>'}${state.chatBusy ? '<div class="bubble" role="status">Lumi is preparing a response...</div>' : ""}</div><div class="topic-buttons">${["A breathing pause", "Study and rest balance", "Everyday self-care", "Reaching out for support"].map((s, i) => `<button data-topic="${i}" ${state.chatBusy ? "disabled" : ""}>${s} ${icon("arrow")}</button>`).join("")}</div>${state.aiPersonalChat ? `<form id="chat-form" class="chat-composer"><label for="chat-message">${state.aiPersonalChat ? "What is on your mind?" : "Personal chat is not enabled yet"}</label><textarea id="chat-message" name="message" maxlength="2000" rows="3" placeholder="${state.aiPersonalChat ? "You can start wherever feels comfortable..." : "For now, choose a topic above."}" ${!state.aiPersonalChat || state.chatBusy ? "disabled" : ""} required>${esc(state.chatDraft)}</textarea><div class="composer-actions"><small>${state.aiPersonalChat ? "Up to 2,000 characters. Lumi is AI, not a therapist." : "Personal conversations need a provider setup suitable for sensitive information."}</small><button class="button" type="submit" ${!state.aiPersonalChat || state.chatBusy ? "disabled" : ""}>Send ${icon("arrow")}</button></div></form>` : '<p class="muted">Choose a topic above for a general wellbeing response. For personal support, request time with a counselor.</p>'}<div class="divider"></div><button class="text-link" data-action="clear-chat">Clear this conversation</button></section><section class="stack"><div class="card mint"><h2>Human support matters</h2><p>If you need to talk about personal emotional concerns, a qualified counselor can offer support that an AI cannot.</p><button class="button secondary" data-page="appointments">Request counseling</button></div><div class="card"><h2>Your conversation, your choice</h2><p>Messages here stay in this page’s memory. Refresh or clear the conversation to remove them. Google processes AI requests under its own terms.</p><p>In preview mode, Lumi uses clearly labeled example replies.</p><button class="text-link" data-page="help">I need urgent support ${icon("arrow")}</button></div></section></div>`
   );
 }
 function resourcesView(query = "") {
@@ -313,7 +348,7 @@ function resourcesView(query = "") {
       "A little care, within reach",
       "Explore gentle practices and practical ideas for student life.",
     ) +
-    `<div class="resource-grid">${rr.map((r, i) => `<article class="card"><div class="resource-cover c${i % 3}">${icon(r.icon || "book")}</div><span class="eyebrow">${esc(r.category)}</span><h2 style="margin:12px 0">${esc(r.title)}</h2><p class="muted">${esc(r.body.slice(0, 100))}…</p><button class="text-link" data-resource="${esc(r.id)}">Explore resource ${icon("arrow")}</button></article>`).join("") || "<p>No resources matched your search.</p>"}</div>`
+    `<div class="resource-grid">${rr.map((r, i) => `<article class="card"><div class="resource-cover c${i % 3}">${icon(r.icon || "book")}</div><span class="eyebrow">${esc(r.category)}</span><h2 style="margin:12px 0">${esc(r.title)}</h2><p class="muted">${esc(r.body.slice(0, 100))}…</p><button class="text-link" data-resource="${esc(r.id)}">${({breathing:"Start breathing guide", study:"Open study timer", grounding:"Try grounding", support:"Build a message", rest:"Make a rest plan", external:"Browse materials"})[r.id] || "Open resource"} ${icon("arrow")}</button></article>`).join("") || "<p>No resources matched your search.</p>"}</div>`
   );
 }
 function appointmentsView() {
@@ -323,23 +358,21 @@ function appointmentsView() {
       "You deserve to be heard",
       "Request a conversation with your school guidance team.",
     ) +
-    `<div class="two-col"><section class="card"><h2>Request a counseling session</h2><div class="notice">This sends a request, not a confirmed booking. Your school must connect and staff this service. It is not monitored for emergencies.</div><form id="appointment-form"><label class="field">Preferred date and time<input name="requested_at" type="datetime-local" required min="${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}"></label><label class="field">Session preference<select name="mode"><option>In person</option><option>Online</option></select></label><label class="field">What would you like support with?<select name="reason"><option>Study and workload</option><option>General wellbeing</option><option>Relationships and belonging</option><option>I prefer to discuss this in person</option></select></label><label><input type="checkbox" required> I agree to share this request and my display name with the guidance team.</label><p class="muted">Mood notes, reflection answers, and AI conversations are not shared.</p><button class="button">Send appointment request ${icon("arrow")}</button></form></section><section class="card"><h2>Your requests</h2>${state.appointments.length ? state.appointments.map((a) => `<div class="list-item"><span class="chip">${esc(a.status)}</span><h3>${new Date(a.requested_at).toLocaleString()}</h3><p>${esc(a.mode)} · ${esc(a.reason)}</p>${["pending", "confirmed"].includes(a.status) ? `<button class="text-link" data-cancel="${a.id}">Cancel request</button>` : ""}</div>`).join("") : '<div class="empty">No requests yet.<br>Your next small step can start here.</div>'}</section></div>`
+    `<div class="two-col"><section class="card"><h2>Request a counseling session</h2><div class="notice">This sends a request, not a confirmed booking. The guidance team reviews requests in its staff dashboard. It is not monitored for emergencies.</div><form id="appointment-form"><label class="field">Preferred date and time<input name="requested_at" type="datetime-local" required min="${new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16)}"></label><label class="field">Session preference<select name="mode"><option>In person</option><option>Online</option></select></label><label class="field">What would you like support with?<select name="reason"><option>Study and workload</option><option>General wellbeing</option><option>Relationships and belonging</option><option>I prefer to discuss this in person</option></select></label><label><input type="checkbox" required> I agree to share this request and my display name with the guidance team.</label><p class="muted">Mood notes, reflection answers, and AI conversations are not shared.</p><button class="button">Send appointment request ${icon("arrow")}</button></form></section><section class="card"><h2>Your requests</h2>${state.appointments.length ? state.appointments.map((a) => `<div class="list-item"><span class="chip">${esc(a.status)}</span><h3>${new Date(a.requested_at).toLocaleString()}</h3><p>${esc(a.mode)} · ${esc(a.reason)}</p>${["pending", "confirmed"].includes(a.status) ? `<button class="text-link" data-cancel="${a.id}">Cancel request</button>` : ""}</div>`).join("") : '<div class="empty">No requests yet.<br>Your next small step can start here.</div>'}</section></div>`
   );
 }
 function counselorView() {
-  if (state.role === "student")
-    return '<div class="card">This workspace is available only to authorized counselors.</div>';
-  return (
-    heading(
-      "GUIDANCE WORKSPACE",
-      "Make space for your students",
-      "Only voluntarily submitted appointment details are visible here.",
-    ) +
-    `<section class="card"><h2>Appointment requests</h2><div class="notice">Private moods and reflection answers are not accessible. Requests are not crisis alerts and should be checked according to your school’s published response schedule.</div><div class="table-wrap"><table><thead><tr><th>Student reference</th><th>Requested time</th><th>Topic</th><th>Status</th><th>Manage</th></tr></thead><tbody>${state.appointments.map((a) => `<tr><td>${esc(a.student_name || a.user_id?.slice(0, 8) || "Preview student")}</td><td>${new Date(a.requested_at).toLocaleString()}</td><td>${esc(a.reason)}</td><td>${esc(a.status)}</td><td>${a.status === "pending" ? `<button class="button secondary" data-status="confirmed" data-id="${a.id}">Confirm</button>` : ""}${["pending", "confirmed"].includes(a.status) ? ` <button class="text-link" data-status="completed" data-id="${a.id}">Complete</button>` : ""}</td></tr>`).join("")}</tbody></table></div>${!state.appointments.length ? '<div class="empty">No appointment requests to review.</div>' : ""}</section><section class="card" style="margin-top:22px"><h2>Publish a resource</h2>${resourceForm()}${resourceManage()}</section>`
-  );
+  if (!["counselor", "admin"].includes(state.role))
+    return '<div class="card">This workspace is available only to authorized staff.</div>';
+  const counts = Object.fromEntries(["pending", "confirmed", "completed", "cancelled"].map(status => [status, state.report?.counts?.[status] ?? state.appointments.filter(a => a.status === status).length]));
+  const requests = state.appointments.filter(a => state.staffFilter === "all" || (state.staffFilter === "active" ? ["pending", "confirmed"].includes(a.status) : a.status === state.staffFilter)).sort((a,b) => new Date(a.requested_at) - new Date(b.requested_at));
+  return heading("PRIVATE STAFF WORKSPACE", "Counseling administration", "Review appointment requests and help students take their next step.") +
+    `<div class="tiles staff-stats"><section class="card"><small>Awaiting confirmation</small><div class="stat">${counts.pending}</div></section><section class="card"><small>Confirmed sessions</small><div class="stat">${counts.confirmed}</div></section><section class="card"><small>Completed sessions</small><div class="stat">${counts.completed}</div></section></div>
+    ${Wellbeing.reports()}<section class="card staff-toolbar"><div><h2>Appointment requests</h2><p>Only shared request details appear here. Check this dashboard regularly; it is not an emergency inbox.</p></div><div class="activity-actions"><label class="field">Show requests<select id="staff-filter">${["active","all","pending","confirmed","completed","cancelled"].map(value=>`<option value="${value}" ${state.staffFilter === value ? "selected" : ""}>${value.charAt(0).toUpperCase()+value.slice(1)}</option>`).join("")}</select></label><button class="button secondary" data-action="staff-refresh">${icon("clock")} Refresh requests</button><button class="text-link" data-action="logout">Sign out</button></div></section>
+    <div class="staff-request-grid">${requests.map(a=>`<article class="card staff-request"><div class="row spread"><h2>${esc(a.student_name || "Student request")}</h2><span class="chip status-${esc(a.status)}">${esc(a.status)}</span></div>${a.status==="pending" && a.created_at && Date.now()-new Date(a.created_at)>172800000 ? '<p class="follow-up">Waiting over 48 hours - review requested</p>':""}<h3>${new Date(a.requested_at).toLocaleString()}</h3><p>${esc(a.mode)} &middot; ${esc(a.reason)}</p><small class="muted">Request reference: ${esc(a.id?.slice(0,8) || "Preview")}</small><div class="activity-actions">${a.status === "pending" ? `<button class="button secondary" data-status="confirmed" data-id="${esc(a.id)}">${icon("check")} Confirm request</button>` : ""}${a.status === "confirmed" ? `<button class="button secondary" data-status="completed" data-id="${esc(a.id)}">${icon("check")} Mark completed</button>` : ""}${["pending","confirmed"].includes(a.status) ? `<button class="text-link" data-status="cancelled" data-id="${esc(a.id)}">Cancel request</button>` : '<span class="muted">This request is closed.</span>'}</div></article>`).join("") || '<section class="card empty">No requests match this filter.</section>'}</div><details class="card" style="margin-top:22px"><summary>Manage learning resources</summary>${resourceForm()}${resourceManage()}</details>`;
 }
 function resourceForm() {
-  return `<form id="resource-form"><div class="two-col"><label class="field">Title<input name="title" required maxlength="120"></label><label class="field">Category<input name="category" required maxlength="60"></label></div><label class="field">Resource content<textarea name="body" required maxlength="10000"></textarea></label><button class="button">Publish resource</button></form>`;
+  return `<form id="resource-form"><div class="two-col"><label class="field">Title<input name="title" required maxlength="120"></label><label class="field">Category<input name="category" required maxlength="60"></label></div><label class="field">Resource content<textarea name="body" required maxlength="10000"></textarea></label><label class="field">Optional HTTPS material or video link<input type="url" name="url" pattern="https://.*" placeholder="https://..."></label><button class="button">Publish resource</button></form>`;
 }
 function resourceManage() {
   return state.resources
@@ -358,7 +391,7 @@ function adminView() {
       "A responsible support space",
       "Manage access and educational content without reading private reflections.",
     ) +
-    `<div class="tiles"><div class="card"><small>Registered profiles</small><div class="stat">${live ? state.users.length : "—"}</div></div><div class="card"><small>Published resources</small><div class="stat">${state.resources.length + resources.length}</div></div><div class="card"><small>Reflection templates</small><div class="stat">${state.assessments.length || 1}</div></div></div><section class="card" style="margin-top:22px"><h2>Accounts & counselor access</h2>${!live ? '<div class="notice">Preview: real account management becomes available after Supabase setup. Role changes require an authenticated administrator.</div>' : ""}<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Manage</th></tr></thead><tbody>${state.users.map((u) => `<tr><td>${esc(u.display_name)}</td><td>${esc(u.role)}</td><td><select data-user-role="${u.id}" aria-label="Role for ${esc(u.display_name)}">${["student", "counselor", "admin"].map((r) => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></section><div class="two-col" style="margin-top:22px"><section class="card"><h2>Resources</h2>${resourceForm()}${resourceManage()}</section><section class="card"><h2>Reflection template</h2><p class="muted">Use only non-diagnostic custom questions. Clinical screening tools require separate validation and scoring.</p><form id="template-form"><label class="field">Title<input name="title" required value="${esc(state.assessments[0]?.title || "Everyday wellbeing reflection")}"></label><label class="field">Questions (one per line, 1–10)<textarea name="questions" required>${esc((state.assessments[0]?.questions || questions).join("\n"))}</textarea></label><button class="button">Save template</button></form></section></div>`
+    `${Wellbeing.reports()}<div class="tiles"><div class="card"><small>Registered profiles</small><div class="stat">${live ? state.users.length : "—"}</div></div><div class="card"><small>Published resources</small><div class="stat">${state.resources.length + resources.length}</div></div><div class="card"><small>Reflection templates</small><div class="stat">${state.assessments.length || 1}</div></div></div><section class="card" style="margin-top:22px"><h2>Accounts & counselor access</h2>${!live ? '<div class="notice">Preview: real account management becomes available after Supabase setup. Role changes require an authenticated administrator.</div>' : ""}<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Manage</th></tr></thead><tbody>${state.users.map((u) => `<tr><td>${esc(u.display_name)}</td><td>${esc(u.role)}</td><td><select ${u.id===session?.user?.id?"disabled":""} data-user-role="${u.id}" aria-label="Role for ${esc(u.display_name)}">${["student", "counselor", "admin"].map((r) => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></section><div class="two-col" style="margin-top:22px"><section class="card"><h2>Resources</h2>${resourceForm()}${resourceManage()}</section><section class="card">${Wellbeing.templatesEditor()}</section></div>`
   );
 }
 function profileView() {
@@ -367,14 +400,18 @@ function profileView() {
     `<div class="two-col"><section class="card"><h2>Profile details</h2><form id="profile-form"><label class="field">Display name<input name="display_name" value="${esc(state.profile.display_name)}" required maxlength="60"></label><button class="button">Save profile</button></form><div class="divider"></div>${!live ? `<label class="field">Explore a preview role<select id="preview-role">${["student", "counselor", "admin"].map((r) => `<option ${state.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></label><small>This preview switch does not grant live account permissions.</small>` : `<p>Role: ${esc(state.role)}</p><button class="button outline" data-action="logout">Sign out</button>`}</section><section class="card"><h2>Data choices</h2><p>Export your visible personal records or delete individual mood entries and reflections in their history views.</p><button class="button secondary" data-action="export">Export my data</button><div class="divider"></div><h3>Account deletion</h3><p>Deleting your account removes your profile, moods, reflections, and appointment records from the active database. Backups follow the operator’s configured retention.</p><button class="button danger" data-action="delete-account">Delete my account & records</button></section></div>`
   );
 }
+function staffAuthView() {
+  return `<main class="login-screen"><section class="auth-frame card"><aside class="login-welcome"><div class="brand"><span class="brandmark">${icon("leaf")}</span>stillwell.</div><div class="login-art">${mascot(true)}</div><div class="welcome-copy"><span class="eyebrow">GUIDANCE TEAM</span><h2>A little care.<br>A real connection.</h2><p>A private workspace for counseling requests.</p></div></aside><section class="auth-panel"><div class="login-heading"><span class="eyebrow">AUTHORIZED STAFF ONLY</span><h1>Admin / Staff sign-in</h1><p>Sign in to manage counseling appointments.</p></div><form id="staff-auth-form"><label class="field">Username<input name="username" required maxlength="80" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Your staff username"></label><label class="field">Password<input name="password" type="password" required maxlength="1024" autocomplete="current-password" placeholder="Your password"></label><button class="button login-submit">Sign in ${icon("arrow")}</button></form><p class="auth-alternate"><button type="button" data-auth-mode="login">Return to student sign-in</button></p><nav class="auth-public-links" aria-label="Public information"><button type="button" class="text-link" data-page="help">Need urgent help?</button><button type="button" class="text-link" data-page="privacy">Privacy policy</button><button type="button" class="text-link" data-page="terms">Terms of use</button></nav></section></section></main>`;
+}
 function authView() {
+  if (authMode === "staff") return staffAuthView();
   const signup = authMode === "signup";
-  return `<main class="login-screen"><section class="auth-frame card"><aside class="login-welcome"><div class="brand"><span class="brandmark">${icon("leaf")}</span>stillwell<span style="color:#a69dce">.</span></div><div class="login-art">${mascot(true)}</div><div class="welcome-copy"><span class="eyebrow">YOUR WELLBEING SPACE</span><h2>A little space<br>just for you.</h2><p>Take a breath. You’re right where you need to be.</p></div></aside><section class="auth-panel"><div class="login-heading"><span class="eyebrow">${signup ? "GET STARTED" : "WELCOME BACK"}</span><h1>${signup ? "Create your account" : "Log in"}</h1><p>${signup ? "Make a little space for yourself." : "Sign in to continue to your space."}</p></div><form id="auth-form">${signup ? '<label class="field">Display name<input name="name" maxlength="60" required autocomplete="name" placeholder="Your name"></label>' : ""}<label class="field">Email<input name="email" type="email" required autocomplete="email" placeholder="you@example.com"></label><label class="field">Password<input name="password" type="password" minlength="12" required autocomplete="${signup ? "new-password" : "current-password"}" placeholder="At least 12 characters"></label>${signup ? '<label class="signup-consent"><input name="accept" type="checkbox" required> I am 18 or older and accept the <button type="button" data-page="terms">Terms of use</button> and <button type="button" data-page="privacy">Privacy policy</button>.</label>' : ""}<button class="button login-submit" name="mode" value="${signup ? "signup" : "login"}">${signup ? "Create account" : "Log in"}${icon("arrow")}</button></form>${signup ? '<p class="auth-alternate">Already have an account? <button type="button" data-auth-mode="login">Log in</button></p>' : '<div class="auth-actions"><button type="button" class="auth-switch" data-action="reset-password">Forgot password?</button><span>New to Stillwell? <button type="button" class="auth-switch" data-auth-mode="signup">Create an account</button></span></div>'}</section></section></main>`;
+  return `<main class="login-screen"><section class="auth-frame card"><aside class="login-welcome"><div class="brand"><span class="brandmark">${icon("leaf")}</span>stillwell<span style="color:#a69dce">.</span></div><div class="login-art">${mascot(true)}</div><div class="welcome-copy"><span class="eyebrow">YOUR WELLBEING SPACE</span><h2>A little space<br>just for you.</h2><p>Take a breath. You’re right where you need to be.</p></div></aside><section class="auth-panel"><div class="login-heading"><span class="eyebrow">${signup ? "GET STARTED" : "WELCOME BACK"}</span><h1>${signup ? "Create your account" : "Log in"}</h1><p>${signup ? "Make a little space for yourself." : "Sign in to continue to your space."}</p></div><form id="auth-form">${signup ? '<label class="field">Display name<input name="name" maxlength="60" required autocomplete="name" placeholder="Your name"></label>' : ""}<label class="field">Email<input name="email" type="email" required autocomplete="email" placeholder="you@example.com"></label><label class="field">Password<input name="password" type="password" minlength="12" required autocomplete="${signup ? "new-password" : "current-password"}" placeholder="At least 12 characters"></label>${signup ? '<label class="signup-consent"><input name="accept" type="checkbox" required> I am 18 or older and accept the <button type="button" data-page="terms">Terms of use</button> and <button type="button" data-page="privacy">Privacy policy</button>.</label>' : ""}<button class="button login-submit" name="mode" value="${signup ? "signup" : "login"}">${signup ? "Create account" : "Log in"}${icon("arrow")}</button></form>${signup ? '<p class="auth-alternate">Already have an account? <button type="button" data-auth-mode="login">Log in</button></p>' : '<div class="auth-actions"><button type="button" class="auth-switch" data-action="reset-password">Forgot password?</button><span>New to Stillwell? <button type="button" class="auth-switch" data-auth-mode="signup">Create an account</button></span></div>'}<div class="staff-login-entry"><span>For administrators and guidance staff</span><button type="button" class="button secondary" data-auth-mode="staff">${icon("shield")} Admin / Staff sign-in ${icon("arrow")}</button></div><nav class="auth-public-links" aria-label="Public information"><button type="button" class="text-link" data-page="help">Need urgent help?</button><button type="button" class="text-link" data-page="privacy">Privacy policy</button><button type="button" class="text-link" data-page="terms">Terms of use</button></nav></section></section></main>`;
 }
 function helpView() {
   return (
     heading("HUMAN SUPPORT COMES FIRST", "You don’t have to face this alone.") +
-    `<section class="card" style="max-width:850px"><h2>If you may be in immediate danger</h2><p>Contact your local emergency services or go to the nearest emergency department. If possible, reach out to someone you trust and ask them to stay with you. Move away from anything you could use to hurt yourself, if you can do so safely.</p><div class="notice warn">Stillwell is not an emergency service. This page and the AI are not continuously monitored. We do not automatically contact anyone or guarantee detection of a crisis.</div><h3>If you need someone to talk to</h3><p>Reach out to a trusted person or a qualified mental-health professional. Your school guidance office may also be able to help.</p><button class="button" data-page="appointments">Request a non-urgent counseling session</button><div class="divider"></div><p class="muted">School contact details must be verified and added by your institution before launch. No unverified hotline numbers are displayed.</p></section>`
+    `<section class="card" style="max-width:850px"><h2>If you may be in immediate danger</h2><p>Contact your local emergency services or go to the nearest emergency department. If possible, reach out to someone you trust and ask them to stay with you. Move away from anything you could use to hurt yourself, if you can do so safely.</p><div class="notice warn">Stillwell is not an emergency service. This page and the AI are not continuously monitored. We do not automatically contact anyone or guarantee detection of a crisis.</div><h3>If you need someone to talk to</h3><p>Reach out to a trusted person or a qualified mental-health professional. Your school guidance office may also be able to help.</p><button class="button" data-page="appointments">Request a non-urgent counseling session</button><div class="divider"></div>${Wellbeing.contacts()}</section>`
   );
 }
 function policyView(type) {
@@ -385,7 +422,7 @@ function policyView(type) {
       privacy ? "Privacy policy" : "Terms of use",
       "Prototype policy · Version 1 · Updated 19 October 2026",
     ) +
-    `<article class="card policy" style="max-width:900px"><div class="notice warn">This is a development policy draft. The operating institution, privacy contact, retention schedule, and jurisdiction must be completed and reviewed before collecting real student information.</div>${privacy ? `<h3>What we collect and why</h3><p>When connected, Supabase Auth processes your email and authentication credentials. The application stores your display name, role, policy acceptance, daily mood and optional note, reflection results, and appointment requests. These support your account, personal history, and requested counseling services.</p><h3>Who can see your records</h3><p>Students can access their own mood entries and reflection results. Authorized counselors can access voluntarily submitted appointment details and the display name supplied with a request. Administrators manage profiles, roles and content, but the application does not grant them access to private mood notes or assessment answers. Privileged database operators can technically access stored data. This service does not offer end-to-end encryption.</p><h3>AI and Google Gemini</h3><p>In free mode, only a predefined general wellbeing topic is sent to Gemini after you opt in. Your account identifier, mood notes, assessment answers and appointment details are not included. Google may use free-service prompts and responses to improve its products, and human review may occur. Do not submit personal or confidential information. AI conversation text is kept in page memory only; server-side usage counters contain no message content.</p><h3>Storage and session information</h3><p>Preview entries exist only in browser memory and disappear on refresh. A connected account uses Supabase PostgreSQL; authentication tokens are stored in session storage for the current browser tab. Network providers may process technical logs. No advertising analytics are included. Hosting and database providers may process data outside your country according to the operator’s selected region.</p><h3>Your choices and deletion</h3><p>Use My profile to export your records or delete your account. You can delete individual moods and reflections. Deleting the account cascades through personal records in the active database. Provider backups and logs may remain for the configured retention period. Before launch, the operator must publish the actual retention period and a working contact for privacy requests.</p><h3>Sharing and safeguarding</h3><p>Appointment submission requires your agreement to share that request with the guidance team. The application does not automatically send crisis alerts. Any future safeguarding disclosure procedure must be explained by the operating institution before activation.</p><h3>Age and contact</h3><p>This implementation is intended for adults aged 18 and above. The institution must publish its legal name, privacy officer contact, and applicable rights process before live use.</p>` : `<h3>Purpose of the service</h3><p>Stillwell offers self-reflection, general wellbeing education and appointment requests. It does not diagnose, treat, provide medical advice, or replace a qualified professional. Reflection points are a summary of answers, not a clinical score.</p><h3>Eligibility and account responsibilities</h3><p>This implementation is for adults aged 18 or older. Keep your credentials private, provide accurate account information, and use the service respectfully. You may not access another person’s records or misuse staff access.</p><h3>AI limitations</h3><p>Lumi is an AI companion and may produce inaccurate or unsuitable information. It is not a therapist. Do not rely on AI for medical decisions or emergencies. Free mode supports general topics only and does not accept personal emotional disclosures.</p><h3>Counseling requests</h3><p>A submitted request is pending until a counselor confirms it. Availability and response times depend on your institution. No live counseling service or partner relationship is implied by this prototype.</p><h3>Urgent situations</h3><p>The platform is not monitored for emergencies and cannot promise detection or intervention. Contact local emergency services, a trusted person, or an appropriate professional when urgent help is needed.</p><h3>Content and availability</h3><p>Educational material is provided for general information. External websites have separate policies. Service availability, free API quotas and provider features can change. You may stop using the service and request deletion of your records.</p><h3>Before institutional launch</h3><p>The operator must add its legal identity, contact details, applicable jurisdiction, support arrangements and reviewed policies. These draft terms do not claim regulatory compliance or replace legal review.</p>`}<div class="divider"></div><button class="button secondary" data-page="home">Return to my space</button></article>`
+    `<article class="card policy" style="max-width:900px">${Wellbeing.operatorPolicy()}${privacy ? `<h3>What we collect and why</h3><p>When connected, Supabase Auth processes your email and authentication credentials. The application stores your display name, role, policy acceptance, daily mood and optional note, reflection results, and appointment requests. These support your account, personal history, and requested counseling services.</p><h3>Who can see your records</h3><p>Students can access their own mood entries and reflection results. Authorized counselors can access voluntarily submitted appointment details and the display name supplied with a request. Administrators manage profiles, roles and content, but the application does not grant them access to private mood notes or assessment answers. Privileged database operators can technically access stored data. This service does not offer end-to-end encryption.</p><h3>AI and Google Gemini</h3><p>In free mode, only a predefined general wellbeing topic is sent to Gemini after you opt in. If personal chat is enabled with a suitable paid-service configuration, your typed message and up to six recent exchanges are sent to Google. Paid-service prompts are not used to improve Google products, but Google may retain them for safety and abuse prevention. Your account identifier, mood notes, assessment answers and appointment details are not included. Google may use free-service prompts and responses to improve its products, and human review may occur. Do not submit personal or confidential information. AI conversation text is kept in page memory only; server-side usage counters contain no message content.</p><h3>Storage and session information</h3><p>Preview entries exist only in browser memory and disappear on refresh. A connected account uses Supabase PostgreSQL; authentication tokens are stored in session storage for the current browser tab. Network providers may process technical logs. No advertising analytics are included. Hosting and database providers may process data outside your country according to the operator’s selected region.</p><h3>Your choices and deletion</h3><p>Use My profile to export your records or delete your account. You can delete individual moods and reflections. Deleting the account cascades through personal records in the active database. Provider backups and logs may remain for the configured retention period. The retention details and privacy contact are listed above. You can request access, correction, or deletion through that contact.</p><h3>Sharing and safeguarding</h3><p>Appointment submission requires your agreement to share that request with the guidance team. The application does not automatically send crisis alerts. Any future safeguarding disclosure procedure must be explained by the operating institution before activation.</p><h3>Age and contact</h3><p>This implementation is intended for adults aged 18 and above. For privacy questions or requests to access, correct, or delete your records, contact the operator listed above. You may also contact the Philippine National Privacy Commission about privacy concerns.</p>` : `<h3>Purpose of the service</h3><p>Stillwell offers self-reflection, general wellbeing education and appointment requests. It does not diagnose, treat, provide medical advice, or replace a qualified professional. Reflection points are a summary of answers, not a clinical score.</p><h3>Eligibility and account responsibilities</h3><p>This implementation is for adults aged 18 or older. Keep your credentials private, provide accurate account information, and use the service respectfully. You may not access another person’s records or misuse staff access.</p><h3>AI limitations</h3><p>Lumi is an AI companion and may produce inaccurate or unsuitable information. It is not a therapist. Do not rely on AI for medical decisions or emergencies. Free mode supports general topics only. When personal chat is enabled, messages and up to six recent exchanges are sent to Google; the app does not save this chat in its database.</p><h3>Counseling requests</h3><p>A submitted request is pending until a counselor confirms it. Availability and response times depend on your institution. A request is only confirmed when guidance staff update its status. The website does not guarantee a response time or send emergency alerts.</p><h3>Urgent situations</h3><p>The platform is not monitored for emergencies and cannot promise detection or intervention. Contact local emergency services, a trusted person, or an appropriate professional when urgent help is needed.</p><h3>Content and availability</h3><p>Educational material is provided for general information. External websites have separate policies. Service availability, free API quotas and provider features can change. You may stop using the service and request deletion of your records.</p><h3>Operator and applicable framework</h3><p>This service is operated for the school and country listed above. Questions about these terms can be sent to the privacy contact. These terms do not limit rights available under applicable Philippine law. School office hours and appointment availability must be confirmed with the guidance team.</p>`}<div class="divider"></div><button class="button secondary" data-page="home">Return to my space</button></article>`
   );
 }
 function pageView() {
@@ -422,10 +459,8 @@ function pageView() {
 function openResource(id) {
   const r = [...resources, ...state.resources].find((x) => x.id === id);
   if (!r) return;
-  modal(
-    esc(r.title),
-    `<p>${esc(r.body)}</p>${id === "breathing" ? '<div class="breathing" id="breathing">Breathe naturally</div><button class="button" data-action="breathe">Start gentle guide</button><p class="muted">Follow a comfortable pace. Stop anytime.</p>' : ""}${r.url && /^https:\/\//.test(r.url) ? `<a class="button" href="${esc(r.url)}" target="_blank" rel="noopener noreferrer">Open resource</a>` : ""}`,
-  );
+  if (id === "contacts") { navigate("help"); return; }
+  window.ResourceActivities.open(r);
 }
 async function edge(body) {
   await ensureSession();
@@ -475,6 +510,7 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (b.dataset.cancel || b.dataset.status) {
+      if (b.dataset.status && !confirm("Change this request to " + b.dataset.status + "?")) return;
       let id = b.dataset.cancel || b.dataset.id,
         status = b.dataset.cancel ? "cancelled" : b.dataset.status;
       if (live)
@@ -489,29 +525,9 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (b.dataset.topic !== undefined) {
-      if (!$("#ai-consent").checked) {
-        toast("Please read and accept the AI disclosure first.");
-        return;
-      }
-      let i = Number(b.dataset.topic),
-        topics = [
-          "A breathing pause",
-          "Study and rest balance",
-          "Everyday self-care",
-          "Reaching out for support",
-        ];
-      b.disabled = true;
-      let reply;
-      if (live) {
-        reply = (await edge({ action: "topic", topic: i, consent: true }))
-          .reply;
-      } else reply = "Preview reply: " + resources[[0, 1, 4, 3][i]].body;
-      state.messages.push(
-        { role: "user", text: topics[i] },
-        { role: "assistant", text: reply },
-      );
-      render();
-      $("#ai-consent").checked = true;
+      const i = Number(b.dataset.topic);
+      const topics = ["A breathing pause", "Study and rest balance", "Everyday self-care", "Reaching out for support"];
+      await sendChat(topics[i], i);
       return;
     }
     if (b.dataset.removeResource) {
@@ -539,11 +555,19 @@ document.addEventListener("click", async (e) => {
         $("#modal").close();
         clearInterval(window.breathTimer);
         break;
+      case "staff-refresh":
+        await refresh();
+        render();
+        toast("Requests refreshed.");
+        break;
       case "menu":
         $(".sidebar").classList.toggle("open");
         break;
       case "clear-chat":
         state.messages = [];
+        state.chatDraft = "";
+        state.chatEpoch++;
+        state.chatBusy = false;
         render();
         break;
       case "breathe": {
@@ -636,7 +660,12 @@ document.addEventListener("click", async (e) => {
     b.disabled = false;
   }
 });
+document.addEventListener("input", (e) => {
+  if (e.target.id === "chat-message") state.chatDraft = e.target.value;
+});
 document.addEventListener("change", async (e) => {
+  if (e.target.id === "ai-consent") state.aiConsent = e.target.checked;
+  if (e.target.id === "staff-filter") { state.staffFilter = e.target.value; render(); }
   try {
     if (e.target.id === "preview-role") {
       state.role = e.target.value;
@@ -664,6 +693,47 @@ document.addEventListener("change", async (e) => {
   }
 });
 document.addEventListener("submit", async (e) => {
+  if (e.target.id !== "chat-form") return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  await sendChat(state.chatDraft);
+});
+async function sendChat(message, topic) {
+  if (state.chatBusy) return;
+  if (!state.aiConsent) return toast("Please read and accept the AI disclosure first.");
+  message = message.trim();
+  if (!message || message.length > 2000) return toast("Write between 1 and 2,000 characters.");
+  if (topic === undefined && !state.aiPersonalChat) return;
+  const epoch = state.chatEpoch;
+  const history = state.messages.slice(-12);
+  state.chatBusy = true;
+  render();
+  try {
+    let reply;
+    if (live) {
+      const payload = state.aiPersonalChat
+        ? { action: "chat", message, history, consent: true }
+        : { action: "topic", topic, consent: true };
+      reply = (await edge(payload)).reply;
+    } else {
+      reply = "Preview example: no AI request was sent. It can help to make the next step small: choose one manageable task, give yourself a short break, and notice what you need before continuing. What would make the next hour feel a little easier?";
+    }
+    if (epoch !== state.chatEpoch) return;
+    state.messages.push({ role: "user", text: message }, { role: "assistant", text: reply });
+    state.chatDraft = "";
+  } catch (err) {
+    if (epoch === state.chatEpoch) toast(err.message);
+  } finally {
+    if (epoch === state.chatEpoch) {
+      state.chatBusy = false;
+      render();
+      const log = $(".chat-log");
+      if (log) log.scrollTop = log.scrollHeight;
+      $("#chat-message")?.focus();
+    }
+  }
+}
+document.addEventListener("submit", async (e) => {
   e.preventDefault();
   let f = e.target,
     fd = new FormData(f),
@@ -677,6 +747,21 @@ document.addEventListener("submit", async (e) => {
         state.search = v.q;
         navigate("resources");
         break;
+      case "staff-auth-form": {
+        const staffSession = await request("/api?kind=staff-login", {
+          method: "POST", body: JSON.stringify({ username: v.username, password: v.password }),
+        });
+        setSession(staffSession);
+        try {
+          await refresh();
+          if (!["counselor", "admin"].includes(state.role)) throw Error("Staff access is required.");
+        } catch (error) {
+          setSession(null);
+          throw error;
+        }
+        navigate("counselor");
+        break;
+      }
       case "auth-form": {
         if (submit.value === "signup") {
           if (!fd.has("accept"))
@@ -705,7 +790,7 @@ document.addEventListener("submit", async (e) => {
           });
           setSession(s);
           await refresh();
-          navigate("home");
+          navigate(["counselor", "admin"].includes(state.role) ? "counselor" : "home");
         }
         break;
       }
@@ -732,13 +817,13 @@ document.addEventListener("submit", async (e) => {
         }
         render();
         if (
-          /(kill myself|end my life|suicide|hurt myself|immediate danger)/i.test(
+          fd.has("urgent") || /(kill myself|end my life|suicide|hurt myself|immediate danger)/i.test(
             v.note,
           )
         ) {
           modal(
             "Please reach out to a real person now",
-            '<p>If you may be in immediate danger, contact local emergency services or go to the nearest emergency department. If you can, ask someone you trust to stay with you.</p><p>Your note was saved privately. No one has been alerted. This simple text check can miss concerns or misunderstand context.</p><button class="button" data-action="close">Close</button>',
+            `<p>If you may be in immediate danger, contact local emergency services or go to the nearest emergency department. If you can, ask someone you trust to stay with you.</p><p>Your note was saved privately. No one has been alerted. This simple text check can miss concerns or misunderstand context.</p>${Wellbeing.contacts()}<button class="button" data-action="close">Close</button>`,
           );
           break;
         }
@@ -749,14 +834,15 @@ document.addEventListener("submit", async (e) => {
         break;
       }
       case "assessment-form": {
-        let qs = state.assessments[0]?.questions || questions,
+        let qs = Wellbeing.selectedAssessment()?.questions || questions,
           answers = qs.map((_, i) => Number(v["q" + i])),
           score = answers.reduce((a, b) => a + b, 0),
           row = {
             answers,
+            questions_snapshot: qs,
             score,
             max_score: qs.length * 3,
-            assessment_id: state.assessments[0]?.id || null,
+            assessment_id: Wellbeing.selectedAssessment()?.id || null,
           };
         if (live) {
           if (!row.assessment_id)
@@ -825,7 +911,10 @@ document.addEventListener("submit", async (e) => {
         break;
       case "resource-form":
       case "edit-resource-form": {
-        let row = { title: v.title, category: v.category, body: v.body };
+        let content = v.body.trim();
+        if (v.url) { if (!/^https:\/\//.test(v.url)) throw Error("Use an HTTPS resource link."); content += "\n\n" + v.url.trim(); }
+        if (content.length > 10000) throw Error("Resource content and link must fit within 10,000 characters.");
+        let row = { title: v.title, category: v.category, body: content };
         if (live) {
           await db("resources", f.dataset.id ? "?id=eq." + f.dataset.id : "", {
             method: f.dataset.id ? "PATCH" : "POST",
@@ -853,14 +942,15 @@ document.addEventListener("submit", async (e) => {
         if (live) {
           await db(
             "assessments",
-            state.assessments[0] ? "?id=eq." + state.assessments[0].id : "",
+            f.dataset.id ? "?id=eq." + f.dataset.id : "",
             {
-              method: state.assessments[0] ? "PATCH" : "POST",
+              method: f.dataset.id ? "PATCH" : "POST",
               body: JSON.stringify(row),
             },
           );
           await refresh();
-        } else state.assessments = [{ ...row, id: "preview" }];
+        } else if (f.dataset.id) Object.assign(state.assessments.find(a=>a.id===f.dataset.id),row);
+        else state.assessments.push({ ...row, id: crypto.randomUUID() });
         render();
         toast("Template saved.");
         break;
@@ -881,6 +971,23 @@ document.addEventListener("submit", async (e) => {
   }
 });
 async function init() {
+  try {
+    if (live) {
+      const response = await fetch("/api?kind=public-config");
+      if (response.ok) state.publicConfig = await response.json();
+    } else {
+      const response = await fetch("assessments.json");
+      if (response.ok) state.assessments = (await response.json()).map((a,i)=>({...a,id:"preview-"+i}));
+    }
+  } catch {}
+  if (location.hash === "#staff") { authMode = "staff"; state.page = "counselor"; }
+  if (["#help", "#privacy", "#terms"].includes(location.hash)) state.page = location.hash.slice(1);
+  if (live) {
+    try {
+      const response = await fetch("/api?kind=ai-config");
+      if (response.ok) state.aiPersonalChat = (await response.json()).personalChatEnabled === true;
+    } catch {}
+  }
   const hash = new URLSearchParams(location.hash.slice(1));
   if (live && hash.get("access_token")) {
     const token = hash.get("access_token");
