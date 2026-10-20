@@ -19,7 +19,7 @@
   }
   apply();
   window.mountAppearance = () => {
-    const target = document.querySelector(".auth-panel") || document.querySelector(".top-right");
+    const target = document.querySelector(".topbar .top-right");
     const template = document.getElementById("appearance-template");
     if (target && template && !target.querySelector(".appearance-options")) {
       target.prepend(template.content.cloneNode(true));
