@@ -3,15 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <script src="/theme.js"></script>
     <meta
       name="description"
       content="Stillwell: a thoughtful space for student wellbeing, daily reflection, and human support."
     />
-    <title>Stillwell — A little space for you</title>
+    <title>Stillwell | A Little Space for You</title>
+    <link rel="icon" href="/favicon.ico?v=mascot1" sizes="any" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png?v=mascot1" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png?v=mascot1" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png?v=mascot1" />
+    <link rel="manifest" href="/site.webmanifest?v=mascot1" />
     <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="login.css" />
+    <link rel="stylesheet" href="/theme.css" />
   </head>
   <body>
+    <div class="appearance-bar">
+      <fieldset class="appearance-options">
+        <legend>Appearance</legend>
+        <label><input type="radio" name="appearance" value="light"><span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/></svg>Light</span></label>
+        <label><input type="radio" name="appearance" value="dark"><span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 15A9 9 0 0 1 9 4a9 9 0 1 0 11 11Z"/></svg>Dark</span></label>
+        <label><input type="radio" name="appearance" value="system"><span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 17v4m-4 0h8"/></svg>System</span></label>
+      </fieldset>
+    </div>
     <div id="app"></div>
     <dialog id="modal"></dialog>
     <div id="toast" role="status"></div>

@@ -61,3 +61,6 @@ counters. Do not rerun the initial schema on the existing production database.
 
 See [VERIFICATION.md](VERIFICATION.md) for the distinction between live tests,
 simulated browser checks, and email-delivery checks that still require an inbox.
+
+## Appearance
+Use the Light, Dark, or System control at the top of any page. System follows your device appearance automatically. Your choice is saved only in this browser and shared across its tabs; it is available before sign-in and in student and staff workspaces. No personal records are sent when changing appearance.

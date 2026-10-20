@@ -1,0 +1,68 @@
+:root {
+  --surface: #fff;
+  --canvas: #f7f8fc;
+}
+.appearance-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 22px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--border);
+}
+.appearance-options {
+  display: flex;
+  gap: 3px;
+  align-items: center;
+  padding: 3px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.appearance-options legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.appearance-options label { position: relative; cursor: pointer; }
+.appearance-options input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.appearance-options span { display: flex; align-items: center; gap: 6px; padding: 7px 10px; border-radius: 7px; color: var(--muted); font-size: 12px; }
+.appearance-options svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.appearance-options input:checked + span { background: var(--pale); color: var(--ink); }
+.appearance-options input:focus-visible + span { outline: 2px solid var(--purple); outline-offset: 2px; }
+.login-screen { min-height: calc(100vh - 56px); }
+:root[data-theme="dark"] {
+  --ink: #eeedf5;
+  --muted: #b5b2c6;
+  --purple: #c0b3ff;
+  --pale: #353047;
+  --border: #444052;
+  --green: #a3d6bf;
+  --surface: #25232f;
+  --canvas: #191820;
+}
+[data-theme="dark"] body { background: var(--canvas); }
+[data-theme="dark"] :is(.card,.tile,.date,.topbar,.auth-panel,dialog,.button.outline) { background: var(--surface); }
+[data-theme="dark"] :is(.sidebar,.login-welcome) { background: #24212f; border-color: var(--border); }
+[data-theme="dark"] .login-screen { background: radial-gradient(ellipse at 13% 12%, #30283e, transparent 45%), var(--canvas); }
+[data-theme="dark"] :is(.auth-frame,.login-welcome::before,.login-welcome::after) { border-color: var(--border); }
+[data-theme="dark"] :is(.hero,.side-help,.lavender,.resource-cover,.bubble,.notice,.mood-counts span) { background: #332d43; }
+[data-theme="dark"] :is(.mint,.chat-card,.resource-cover.c1,.bubble.user) { background: #263b35; color: #bbdfcf; border-color: #40574e; }
+[data-theme="dark"] :is(.peach,.tip,.notice.warn,.resource-cover.c2,.follow-up) { background: #423429; color: #edc9a7; border-color: #624e3c; }
+[data-theme="dark"] :is(.hero p,.tip p,.notice,.policy p,.welcome-copy p,.auth-actions,.auth-alternate,.signup-consent,footer,footer button,.side-label,.nav,.date,.mood,.auth-panel .field) { color: var(--muted); }
+[data-theme="dark"] :is(.welcome-copy h2,.welcome-copy .eyebrow,.login-heading .eyebrow) { color: var(--ink); }
+[data-theme="dark"] :is(input,select,textarea,.auth-panel .field input,.mood) { background: #1e1c27; color: var(--ink); border-color: var(--border); }
+[data-theme="dark"] :is(input,textarea)::placeholder { color: #a8a2b8; }
+[data-theme="dark"] :is(.mood.selected,.nav:hover,.iconbox,.chip,.avatar) { background: #443857; color: #e1d5ff; }
+[data-theme="dark"] .nav.active { background: #b5a5ed; color: #221b36; }
+[data-theme="dark"] .button { background: #b5a5ed; color: #221b36; }
+[data-theme="dark"] .button.secondary { background: var(--pale); color: var(--purple); }
+[data-theme="dark"] .button.outline { background: var(--surface); color: var(--ink); }
+[data-theme="dark"] .button.danger { background: #914558; color: #fff; }
+[data-theme="dark"] :is(.topic-buttons button,.help-button) { color: #d6bfff; border-color: #625674; }
+[data-theme="dark"] :is(.status-confirmed,.activity-feedback) { color: #bde7cd; }
+[data-theme="dark"] .status-confirmed { background: #2a4235; }
+[data-theme="dark"] :is(.status-cancelled,.crisis-contact) { background: #422a34; color: #f2c6d1; border-color: #715060; }
+[data-theme="dark"] .status-completed { background: #343b49; color: #d0d9ea; }
+[data-theme="dark"] :is(#activity-circle,.breathing) { background: #453959; color: #e6dafa; box-shadow: none; }
+[data-theme="dark"] .mini-calendar .today { color: #221b36; }
+[data-theme="dark"] dialog::backdrop { background: #08070cb3; }
+@media (max-width: 720px) {
+  .appearance-bar { padding: 8px 12px; }
+}

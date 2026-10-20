@@ -98,3 +98,8 @@ Executed 19 October 2026:
 - Database behavior checks passed: signup role locked to student despite metadata; cross-user private-record reads and writes blocked; direct role escalation blocked; counselors cannot read private moods; reflection score recalculated server-side; appointment status authorization enforced; quota blocks request 21; administrator role RPC works.
 
 These checks are not live Supabase integration tests. No user project or provider keys were configured. Browser visual QA was unavailable; responsive CSS and markup were reviewed, but actual device rendering remains unverified. SMTP, real Auth redirects, API quotas, provider responses and institution staffing must be verified during setup.
+
+## Appearance and mascot branding
+- Generated favicon ICO, 16/32 PNG, Apple 180 PNG and Android 192/512 PNG from the supplied mascot, preserving its proportions. Production assets were byte-verified after deployment.
+- Added Light/Dark/System appearance with early theme application, browser persistence, live system changes, and cross-tab synchronization.
+- node tests/appearance.cjs passed: saved preference reload, cross-tab updates, manual overrides, system changes, invalid/unavailable storage, and overflow checks for 11 preview pages at 1440px and 390px. Preview checks do not authenticate real accounts.
