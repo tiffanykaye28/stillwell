@@ -18,6 +18,14 @@
     });
   }
   apply();
+  window.mountAppearance = () => {
+    const target = document.querySelector(".auth-panel") || document.querySelector(".top-right");
+    const template = document.getElementById("appearance-template");
+    if (target && template && !target.querySelector(".appearance-options")) {
+      target.prepend(template.content.cloneNode(true));
+    }
+    apply();
+  };
   document.addEventListener("DOMContentLoaded", apply);
   system.addEventListener("change", apply);
   document.addEventListener("change", event => {

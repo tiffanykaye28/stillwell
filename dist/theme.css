@@ -2,13 +2,10 @@
   --surface: #fff;
   --canvas: #f7f8fc;
 }
-.appearance-bar {
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 22px;
-  background: var(--canvas);
-  border-bottom: 1px solid var(--border);
-}
+.topbar { position: sticky; top: 0; z-index: 3; }
+.topbar .search { min-width: 0; }
+.topbar .search input { width: min(240px, 16vw); min-width: 0; }
+.auth-panel > .appearance-options { align-self: flex-end; margin-bottom: 24px; flex-shrink: 0; }
 .appearance-options {
   display: flex;
   gap: 3px;
@@ -26,7 +23,7 @@
 .appearance-options svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .appearance-options input:checked + span { background: var(--pale); color: var(--ink); }
 .appearance-options input:focus-visible + span { outline: 2px solid var(--purple); outline-offset: 2px; }
-.login-screen { min-height: calc(100vh - 56px); }
+.login-screen { min-height: 100vh; }
 :root[data-theme="dark"] {
   --ink: #eeedf5;
   --muted: #b5b2c6;
@@ -63,6 +60,14 @@
 [data-theme="dark"] :is(#activity-circle,.breathing) { background: #453959; color: #e6dafa; box-shadow: none; }
 [data-theme="dark"] .mini-calendar .today { color: #221b36; }
 [data-theme="dark"] dialog::backdrop { background: #08070cb3; }
-@media (max-width: 720px) {
-  .appearance-bar { padding: 8px 12px; }
+@media (max-width: 1100px) {
+  .topbar .appearance-options span { font-size: 0; gap: 0; padding: 7px; }
+  .topbar .top-right { gap: 8px; }
+  .topbar .top-right .name { display: none; }
+}
+@media (max-width: 760px) {
+  .topbar { gap: 8px; padding-inline: 12px; }
+  .topbar .top-right > .chip { display: none; }
+  .topbar .avatar { width: 28px; height: 28px; }
+  .auth-panel > .appearance-options { align-self: center; }
 }
