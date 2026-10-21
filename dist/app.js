@@ -51,7 +51,8 @@ const moodIcon = (name) => {
     neutral: "M8 15h8",
     sad: "M7.5 16.2c1.1-1.5 2.6-2.3 4.5-2.3s3.4.8 4.5 2.3",
     anxious: "M7.5 15c1-.8 1.8-.8 2.8 0s1.9.8 2.9 0 1.9-.8 2.8 0",
-    angry: "m7.8 8.2 3.1 1.5m5.3-1.5-3.1 1.5m-5.1 6.4c1.1-1.4 2.5-2.1 4-2.1s2.9.7 4 2.1",
+    angry:
+      "m7.8 8.2 3.1 1.5m5.3-1.5-3.1 1.5m-5.1 6.4c1.1-1.4 2.5-2.1 4-2.1s2.9.7 4 2.1",
   };
   const mood = Object.hasOwn(faces, name) ? name : "neutral";
   return `<svg class="mood-face mood-face-${mood}" viewBox="0 0 24 24" aria-hidden="true"><circle class="mood-face-bg" cx="12" cy="12" r="10"/><path class="mood-face-features" d="M8.5 10.5h.01m7 0h.01 ${faces[mood]}"/></svg>`;
@@ -131,9 +132,29 @@ const resources = [
   },
 ];
 resources.push(
-  { id:"contacts", title:"Find human support", category:"Support directory", icon:"shield", body:"Contact the guidance team or find verified Philippines crisis support. Choose the service that fits what you need." },
-  { id:"videos", title:"Watch practical wellbeing guides", category:"Videos and learning", icon:"book", body:"Explore NHS video guides with practical strategies for everyday worries. These educational materials are optional and do not replace professional care.", url:"https://www.nhs.uk/every-mind-matters/mental-wellbeing-tips/self-help-cbt-techniques/" },
-  { id:"audio", title:"Listen to a guided pause", category:"Audio and relaxation", icon:"wind", body:"Choose an NHS audio guide about relaxation, sleep, or everyday wellbeing. Listen at a comfortable volume and stop whenever you wish.", url:"https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/mental-wellbeing-audio-guides/" }
+  {
+    id: "contacts",
+    title: "Find human support",
+    category: "Support directory",
+    icon: "shield",
+    body: "Contact the guidance team or find verified Philippines crisis support. Choose the service that fits what you need.",
+  },
+  {
+    id: "videos",
+    title: "Watch practical wellbeing guides",
+    category: "Videos and learning",
+    icon: "book",
+    body: "Explore NHS video guides with practical strategies for everyday worries. These educational materials are optional and do not replace professional care.",
+    url: "https://www.nhs.uk/every-mind-matters/mental-wellbeing-tips/self-help-cbt-techniques/",
+  },
+  {
+    id: "audio",
+    title: "Listen to a guided pause",
+    category: "Audio and relaxation",
+    icon: "wind",
+    body: "Choose an NHS audio guide about relaxation, sleep, or everyday wellbeing. Listen at a comfortable volume and stop whenever you wish.",
+    url: "https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/mental-wellbeing-audio-guides/",
+  },
 );
 const questions = [
   "I had enough energy for everyday tasks.",
@@ -209,8 +230,12 @@ async function refresh() {
     state.users = await db("profiles", "?order=created_at.desc");
   state.report = null;
   if (["admin", "counselor"].includes(state.role)) {
-    try { state.report = await request("/api?kind=reports"); state.reportError = ""; }
-    catch (error) { state.reportError = error.message; }
+    try {
+      state.report = await request("/api?kind=reports");
+      state.reportError = "";
+    } catch (error) {
+      state.reportError = error.message;
+    }
   }
 }
 async function ensureSession() {
@@ -232,7 +257,8 @@ function setSession(s) {
     state.chatEpoch++;
     state.chatBusy = false;
   }
-  if (s && !s.expires_at && s.expires_in) s.expires_at = Math.floor(Date.now() / 1000) + s.expires_in;
+  if (s && !s.expires_at && s.expires_in)
+    s.expires_at = Math.floor(Date.now() / 1000) + s.expires_in;
   session = s;
   if (s) sessionStorage.setItem("stillwell-session", JSON.stringify(s));
   else sessionStorage.removeItem("stillwell-session");
@@ -254,25 +280,27 @@ document.addEventListener("click", (e) => {
   if (!button) return;
   authMode = button.dataset.authMode;
   state.page = "auth";
-  history.replaceState(null, "", location.pathname + location.search + (authMode === "staff" ? "#staff" : ""));
+  history.replaceState(
+    null,
+    "",
+    location.pathname +
+      location.search +
+      (authMode === "staff" ? "#staff" : ""),
+  );
   render();
 });
 function nav(p, n, label) {
   return `<button class="nav ${state.page === p ? "active" : ""}" data-page="${p}">${icon(n)}${label}</button>`;
 }
 function render() {
-  if (
-    live &&
-    !session &&
-    !["privacy", "terms", "help"].includes(state.page)
-  ) {
+  if (live && !session && !["privacy", "terms", "help"].includes(state.page)) {
     $("#app").innerHTML = authView();
     window.mountAppearance();
     return;
   }
   let staff = state.role !== "student";
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar"><div class="brand"><span class="brandmark"><img src="/stillwell-logo.png?v=mascot1" alt="" width="38" height="38"></span>stillwell<span style="color:#a69dce">.</span></div><div class="side-label">YOUR WELLBEING SPACE</div>${nav("home", "home", "Overview")}${nav("mood", "heart", "Mood check-in")}${nav("assessment", "check", "Self-assessment")}${nav("chat", "chat", "Talk with Lumi")}${nav("resources", "book", "Resource library")}${nav("appointments", "calendar", "Counseling")}${staff ? nav("counselor", "user", "Counselor workspace") : ""}${state.role === "admin" ? nav("admin", "settings", "Administration") : ""}<div class="side-bottom"><div class="side-help">${icon("help")}<h3>You don’t have to do it alone.</h3><p>Find a person to talk to when things feel difficult.</p><button class="button secondary" data-page="help">Find support ${icon("arrow")}</button></div>${nav("profile", "user", "My profile")}<button class="nav help-button" data-page="help">${icon("shield")}Need urgent help?</button></div></aside><div><header class="topbar"><button class="menu-button" data-action="menu" aria-label="Open navigation">${icon("settings")}</button><span class="mobile-brand">stillwell.</span><form id="search" class="search">${icon("search")}<input name="q" aria-label="Search resources" placeholder="Search your wellbeing resources..."></form><div class="top-right">${!live ? '<span class="chip">Interactive preview</span>' : ""}<button data-page="help" aria-label="Support">${icon("help")}</button><span class="avatar">${esc(state.profile.display_name?.[0]?.toUpperCase() || "S")}</span><span class="name">${esc(state.profile.display_name === "there" ? "Your space" : state.profile.display_name)}<br><small>${state.role === "student" ? "Student" : state.role}</small></span></div></header><main class="workspace">${!live ? '<div class="notice">Preview mode · Try every flow with sample data. Entries stay in memory and clear on refresh. Configure Supabase to enable real accounts.</div>' : ""}${pageView()}<footer><span>Stillwell · Small steps. A little more space.</span><span>${live && !session ? '<button data-page="auth">Back to log in</button> · ' : ""}<button data-page="privacy">Privacy policy</button> · <button data-page="terms">Terms of use</button> · <button data-page="help">Get support</button></span></footer></main></div></div>`;
+    `<div class="shell"><aside class="sidebar" id="navigation-sidebar"><div class="brand"><span class="brandmark"><img src="/stillwell-logo.png?v=mascot1" alt="" width="38" height="38"></span>stillwell<span style="color:#a69dce">.</span></div><div class="side-label">YOUR WELLBEING SPACE</div>${nav("home", "home", "Overview")}${nav("mood", "heart", "Mood check-in")}${nav("assessment", "check", "Self-assessment")}${nav("chat", "chat", "Talk with Lumi")}${nav("resources", "book", "Resource library")}${nav("appointments", "calendar", "Counseling")}${staff ? nav("counselor", "user", "Counselor workspace") : ""}${state.role === "admin" ? nav("admin", "settings", "Administration") : ""}<div class="side-bottom"><div class="side-help">${icon("help")}<h3>You don’t have to do it alone.</h3><p>Find a person to talk to when things feel difficult.</p><button class="button secondary" data-page="help">Find support ${icon("arrow")}</button></div>${nav("profile", "user", "My profile")}<button class="nav help-button" data-page="help">${icon("shield")}Need urgent help?</button></div></aside><button class="sidebar-backdrop" data-action="close-menu" aria-label="Close navigation" tabindex="-1"></button><div><header class="topbar"><button class="menu-button" data-action="menu" aria-label="Open navigation" aria-controls="navigation-sidebar" aria-expanded="false">${icon("settings")}</button><span class="mobile-brand">stillwell.</span><form id="search" class="search">${icon("search")}<input name="q" aria-label="Search resources" placeholder="Search your wellbeing resources..."></form><div class="top-right">${!live ? '<span class="chip">Interactive preview</span>' : ""}<button data-page="help" aria-label="Support">${icon("help")}</button><span class="avatar">${esc(state.profile.display_name?.[0]?.toUpperCase() || "S")}</span><span class="name">${esc(state.profile.display_name === "there" ? "Your space" : state.profile.display_name)}<br><small>${state.role === "student" ? "Student" : state.role}</small></span></div></header><main class="workspace">${!live ? '<div class="notice">Preview mode · Try every flow with sample data. Entries stay in memory and clear on refresh. Configure Supabase to enable real accounts.</div>' : ""}${pageView()}<footer><span>Stillwell · Small steps. A little more space.</span><span>${live && !session ? '<button data-page="auth">Back to log in</button> · ' : ""}<button data-page="privacy">Privacy policy</button> · <button data-page="terms">Terms of use</button> · <button data-page="help">Get support</button></span></footer></main></div></div>`;
   window.mountAppearance();
 }
 function heading(k, t, sub = "") {
@@ -325,7 +353,7 @@ function assessmentView() {
       "How have things felt lately?",
       "A personal reflection, not a medical assessment or diagnosis.",
     ) +
-    `<div class="two-col"><section class="card"><label class="field">Choose a reflection<select id="assessment-select">${state.assessments.map(item=>`<option value="${esc(item.id)}" ${item.id===a?.id?"selected":""}>${esc(item.title)}</option>`).join("")}</select></label><h2>${esc(a?.title || "Everyday wellbeing reflection")}</h2><div class="notice">Think about the past seven days. This custom reflection is not a validated screening instrument and has no diagnostic cutoffs.</div><form id="assessment-form">${qs.map((q, i) => `<label class="assessment-q" style="display:block">${i + 1}. ${esc(q)}<select name="q${i}" required><option value="">Choose an answer</option><option value="0">Rarely</option><option value="1">Sometimes</option><option value="2">Often</option><option value="3">Most days</option></select></label>`).join("")}<button class="button" style="margin-top:20px">See my reflection</button></form></section><section class="card"><h2>Your reflections</h2>${state.results.length ? state.results.map((r) => `<div class="list-item"><small>${new Date(r.created_at).toLocaleDateString()}</small><h3>${esc(state.assessments.find(a=>a.id===r.assessment_id)?.title || "Saved reflection")}</h3><strong>${r.score} / ${r.max_score} reflection points</strong><p>This only summarizes your selected answers. Consider what you would like more support with.</p><button class="text-link" data-delete-result="${esc(r.id)}">Delete reflection</button></div>`).join("") : '<div class="empty">Your reflections will appear here.</div>'}<button class="button secondary" data-page="appointments">Talk it through with a counselor</button></section></div>`
+    `<div class="two-col"><section class="card"><label class="field">Choose a reflection<select id="assessment-select">${state.assessments.map((item) => `<option value="${esc(item.id)}" ${item.id === a?.id ? "selected" : ""}>${esc(item.title)}</option>`).join("")}</select></label><h2>${esc(a?.title || "Everyday wellbeing reflection")}</h2><div class="notice">Think about the past seven days. This custom reflection is not a validated screening instrument and has no diagnostic cutoffs.</div><form id="assessment-form">${qs.map((q, i) => `<label class="assessment-q" style="display:block">${i + 1}. ${esc(q)}<select name="q${i}" required><option value="">Choose an answer</option><option value="0">Rarely</option><option value="1">Sometimes</option><option value="2">Often</option><option value="3">Most days</option></select></label>`).join("")}<button class="button" style="margin-top:20px">See my reflection</button></form></section><section class="card"><h2>Your reflections</h2>${state.results.length ? state.results.map((r) => `<div class="list-item"><small>${new Date(r.created_at).toLocaleDateString()}</small><h3>${esc(state.assessments.find((a) => a.id === r.assessment_id)?.title || "Saved reflection")}</h3><strong>${r.score} / ${r.max_score} reflection points</strong><p>This only summarizes your selected answers. Consider what you would like more support with.</p><button class="text-link" data-delete-result="${esc(r.id)}">Delete reflection</button></div>`).join("") : '<div class="empty">Your reflections will appear here.</div>'}<button class="button secondary" data-page="appointments">Talk it through with a counselor</button></section></div>`
   );
 }
 function chatView() {
@@ -350,7 +378,7 @@ function resourcesView(query = "") {
       "A little care, within reach",
       "Explore gentle practices and practical ideas for student life.",
     ) +
-    `<div class="resource-grid">${rr.map((r, i) => `<article class="card"><div class="resource-cover c${i % 3}">${icon(r.icon || "book")}</div><span class="eyebrow">${esc(r.category)}</span><h2 style="margin:12px 0">${esc(r.title)}</h2><p class="muted">${esc(r.body.slice(0, 100))}…</p><button class="text-link" data-resource="${esc(r.id)}">${({breathing:"Start breathing guide", study:"Open study timer", grounding:"Try grounding", support:"Build a message", rest:"Make a rest plan", external:"Browse materials"})[r.id] || "Open resource"} ${icon("arrow")}</button></article>`).join("") || "<p>No resources matched your search.</p>"}</div>`
+    `<div class="resource-grid">${rr.map((r, i) => `<article class="card"><div class="resource-cover c${i % 3}">${icon(r.icon || "book")}</div><span class="eyebrow">${esc(r.category)}</span><h2 style="margin:12px 0">${esc(r.title)}</h2><p class="muted">${esc(r.body.slice(0, 100))}…</p><button class="text-link" data-resource="${esc(r.id)}">${{ breathing: "Start breathing guide", study: "Open study timer", grounding: "Try grounding", support: "Build a message", rest: "Make a rest plan", external: "Browse materials" }[r.id] || "Open resource"} ${icon("arrow")}</button></article>`).join("") || "<p>No resources matched your search.</p>"}</div>`
   );
 }
 function appointmentsView() {
@@ -366,12 +394,32 @@ function appointmentsView() {
 function counselorView() {
   if (!["counselor", "admin"].includes(state.role))
     return '<div class="card">This workspace is available only to authorized staff.</div>';
-  const counts = Object.fromEntries(["pending", "confirmed", "completed", "cancelled"].map(status => [status, state.report?.counts?.[status] ?? state.appointments.filter(a => a.status === status).length]));
-  const requests = state.appointments.filter(a => state.staffFilter === "all" || (state.staffFilter === "active" ? ["pending", "confirmed"].includes(a.status) : a.status === state.staffFilter)).sort((a,b) => new Date(a.requested_at) - new Date(b.requested_at));
-  return heading("PRIVATE STAFF WORKSPACE", "Counseling administration", "Review appointment requests and help students take their next step.") +
+  const counts = Object.fromEntries(
+    ["pending", "confirmed", "completed", "cancelled"].map((status) => [
+      status,
+      state.report?.counts?.[status] ??
+        state.appointments.filter((a) => a.status === status).length,
+    ]),
+  );
+  const requests = state.appointments
+    .filter(
+      (a) =>
+        state.staffFilter === "all" ||
+        (state.staffFilter === "active"
+          ? ["pending", "confirmed"].includes(a.status)
+          : a.status === state.staffFilter),
+    )
+    .sort((a, b) => new Date(a.requested_at) - new Date(b.requested_at));
+  return (
+    heading(
+      "PRIVATE STAFF WORKSPACE",
+      "Counseling administration",
+      "Review appointment requests and help students take their next step.",
+    ) +
     `<div class="tiles staff-stats"><section class="card"><small>Awaiting confirmation</small><div class="stat">${counts.pending}</div></section><section class="card"><small>Confirmed sessions</small><div class="stat">${counts.confirmed}</div></section><section class="card"><small>Completed sessions</small><div class="stat">${counts.completed}</div></section></div>
-    ${Wellbeing.reports()}<section class="card staff-toolbar"><div><h2>Appointment requests</h2><p>Only shared request details appear here. Check this dashboard regularly; it is not an emergency inbox.</p></div><div class="activity-actions"><label class="field">Show requests<select id="staff-filter">${["active","all","pending","confirmed","completed","cancelled"].map(value=>`<option value="${value}" ${state.staffFilter === value ? "selected" : ""}>${value.charAt(0).toUpperCase()+value.slice(1)}</option>`).join("")}</select></label><button class="button secondary" data-action="staff-refresh">${icon("clock")} Refresh requests</button><button class="text-link" data-action="logout">Sign out</button></div></section>
-    <div class="staff-request-grid">${requests.map(a=>`<article class="card staff-request"><div class="row spread"><h2>${esc(a.student_name || "Student request")}</h2><span class="chip status-${esc(a.status)}">${esc(a.status)}</span></div>${a.status==="pending" && a.created_at && Date.now()-new Date(a.created_at)>172800000 ? '<p class="follow-up">Waiting over 48 hours - review requested</p>':""}<h3>${new Date(a.requested_at).toLocaleString()}</h3><p>${esc(a.mode)} &middot; ${esc(a.reason)}</p><small class="muted">Request reference: ${esc(a.id?.slice(0,8) || "Preview")}</small><div class="activity-actions">${a.status === "pending" ? `<button class="button secondary" data-status="confirmed" data-id="${esc(a.id)}">${icon("check")} Confirm request</button>` : ""}${a.status === "confirmed" ? `<button class="button secondary" data-status="completed" data-id="${esc(a.id)}">${icon("check")} Mark completed</button>` : ""}${["pending","confirmed"].includes(a.status) ? `<button class="text-link" data-status="cancelled" data-id="${esc(a.id)}">Cancel request</button>` : '<span class="muted">This request is closed.</span>'}</div></article>`).join("") || '<section class="card empty">No requests match this filter.</section>'}</div><details class="card" style="margin-top:22px"><summary>Manage learning resources</summary>${resourceForm()}${resourceManage()}</details>`;
+    ${Wellbeing.reports()}<section class="card staff-toolbar"><div><h2>Appointment requests</h2><p>Only shared request details appear here. Check this dashboard regularly; it is not an emergency inbox.</p></div><div class="activity-actions"><label class="field">Show requests<select id="staff-filter">${["active", "all", "pending", "confirmed", "completed", "cancelled"].map((value) => `<option value="${value}" ${state.staffFilter === value ? "selected" : ""}>${value.charAt(0).toUpperCase() + value.slice(1)}</option>`).join("")}</select></label><button class="button secondary" data-action="staff-refresh">${icon("clock")} Refresh requests</button><button class="text-link" data-action="logout">Sign out</button></div></section>
+    <div class="staff-request-grid">${requests.map((a) => `<article class="card staff-request"><div class="row spread"><h2>${esc(a.student_name || "Student request")}</h2><span class="chip status-${esc(a.status)}">${esc(a.status)}</span></div>${a.status === "pending" && a.created_at && Date.now() - new Date(a.created_at) > 172800000 ? '<p class="follow-up">Waiting over 48 hours - review requested</p>' : ""}<h3>${new Date(a.requested_at).toLocaleString()}</h3><p>${esc(a.mode)} &middot; ${esc(a.reason)}</p><small class="muted">Request reference: ${esc(a.id?.slice(0, 8) || "Preview")}</small><div class="activity-actions">${a.status === "pending" ? `<button class="button secondary" data-status="confirmed" data-id="${esc(a.id)}">${icon("check")} Confirm request</button>` : ""}${a.status === "confirmed" ? `<button class="button secondary" data-status="completed" data-id="${esc(a.id)}">${icon("check")} Mark completed</button>` : ""}${["pending", "confirmed"].includes(a.status) ? `<button class="text-link" data-status="cancelled" data-id="${esc(a.id)}">Cancel request</button>` : '<span class="muted">This request is closed.</span>'}</div></article>`).join("") || '<section class="card empty">No requests match this filter.</section>'}</div><details class="card" style="margin-top:22px"><summary>Manage learning resources</summary>${resourceForm()}${resourceManage()}</details>`
+  );
 }
 function resourceForm() {
   return `<form id="resource-form"><div class="two-col"><label class="field">Title<input name="title" required maxlength="120"></label><label class="field">Category<input name="category" required maxlength="60"></label></div><label class="field">Resource content<textarea name="body" required maxlength="10000"></textarea></label><label class="field">Optional HTTPS material or video link<input type="url" name="url" pattern="https://.*" placeholder="https://..."></label><button class="button">Publish resource</button></form>`;
@@ -393,15 +441,32 @@ function adminView() {
       "A responsible support space",
       "Manage access and educational content without reading private reflections.",
     ) +
-    `${Wellbeing.reports()}<div class="tiles"><div class="card"><small>Registered profiles</small><div class="stat">${live ? state.users.length : "—"}</div></div><div class="card"><small>Published resources</small><div class="stat">${state.resources.length + resources.length}</div></div><div class="card"><small>Reflection templates</small><div class="stat">${state.assessments.length || 1}</div></div></div><section class="card" style="margin-top:22px"><h2>Accounts & counselor access</h2>${!live ? '<div class="notice">Preview: real account management becomes available after Supabase setup. Role changes require an authenticated administrator.</div>' : ""}<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Manage</th></tr></thead><tbody>${state.users.map((u) => `<tr><td>${esc(u.display_name)}</td><td>${esc(u.role)}</td><td><select ${u.id===session?.user?.id?"disabled":""} data-user-role="${u.id}" aria-label="Role for ${esc(u.display_name)}">${["student", "counselor", "admin"].map((r) => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></section><div class="two-col" style="margin-top:22px"><section class="card"><h2>Resources</h2>${resourceForm()}${resourceManage()}</section><section class="card">${Wellbeing.templatesEditor()}</section></div>`
+    `${Wellbeing.reports()}<div class="tiles"><div class="card"><small>Registered profiles</small><div class="stat">${live ? state.users.length : "—"}</div></div><div class="card"><small>Published resources</small><div class="stat">${state.resources.length + resources.length}</div></div><div class="card"><small>Reflection templates</small><div class="stat">${state.assessments.length || 1}</div></div></div><section class="card" style="margin-top:22px"><h2>Accounts & counselor access</h2>${!live ? '<div class="notice">Preview: real account management becomes available after Supabase setup. Role changes require an authenticated administrator.</div>' : ""}<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Manage</th></tr></thead><tbody>${state.users.map((u) => `<tr><td>${esc(u.display_name)}</td><td>${esc(u.role)}</td><td><select ${u.id === session?.user?.id ? "disabled" : ""} data-user-role="${u.id}" aria-label="Role for ${esc(u.display_name)}">${["student", "counselor", "admin"].map((r) => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></section><div class="two-col" style="margin-top:22px"><section class="card"><h2>Resources</h2>${resourceForm()}${resourceManage()}</section><section class="card">${Wellbeing.templatesEditor()}</section></div>`
   );
 }
 function profileView() {
   const name = state.profile.display_name || "Your profile";
-  const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]).join("").toUpperCase();
-  const role = ({student: "Student", counselor: "Guidance counselor", admin: "Administrator"})[state.role] || "Member";
-  return heading("YOUR ACCOUNT", "Your space, your choices", "A few personal details. Everything you need to feel at home.") +
-    `<div class="profile-layout"><section class="card profile-card"><div class="profile-identity"><div class="profile-initials" aria-hidden="true">${esc(initials)}</div><div class="profile-identity-copy"><span class="eyebrow">YOUR STILLWELL PROFILE</span><h2>${esc(name)}</h2><span class="profile-role">${icon("user")} ${esc(role)}</span></div></div><div class="profile-editor"><div class="profile-section-heading">${icon("user")}<div><h2>Personal details</h2><p>Choose how your name appears in your space.</p></div></div><form id="profile-form"><label class="field">Display name<input name="display_name" value="${esc(state.profile.display_name)}" required maxlength="60" autocomplete="nickname" aria-describedby="profile-name-help"></label><small id="profile-name-help">Use a name you feel comfortable with. You can change it anytime.</small><div class="profile-save-row"><button class="button">${icon("check")} Save changes</button></div></form></div><div class="profile-session">${!live ? `<label class="field">Explore a preview role<select id="preview-role">${["student", "counselor", "admin"].map(r => `<option ${state.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></label><small>This preview switch does not grant live account permissions.</small>` : `<div><h3>Taking a break?</h3><p>Sign out of your account on this device.</p></div><button class="button outline" data-action="logout">${icon("logout")} Sign out</button>`}</div></section><div class="profile-data"><section class="card"><div class="profile-section-heading">${icon("shield")}<div><h2>Your data, in your hands</h2><p>Keep a copy of your personal records.</p></div></div><p class="muted">Export your visible records, or manage individual mood entries and reflections in their history views.</p><button class="button secondary" data-action="export">${icon("arrow")} Export my data</button><button class="text-link profile-privacy" data-page="privacy">Read the privacy policy ${icon("arrow")}</button></section><section class="card profile-delete"><div class="profile-section-heading">${icon("settings")}<div><h2>Account deletion</h2><p>A permanent change to your account.</p></div></div><p class="muted">Deleting your account removes your profile, moods, reflections, and appointment records from the active database. Backups follow the operator's configured retention.</p><button class="button outline" data-action="delete-account">Delete my account & records</button></section></div></div>`;
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+  const role =
+    {
+      student: "Student",
+      counselor: "Guidance counselor",
+      admin: "Administrator",
+    }[state.role] || "Member";
+  return (
+    heading(
+      "YOUR ACCOUNT",
+      "Your space, your choices",
+      "A few personal details. Everything you need to feel at home.",
+    ) +
+    `<div class="profile-layout"><section class="card profile-card"><div class="profile-identity"><div class="profile-initials" aria-hidden="true">${esc(initials)}</div><div class="profile-identity-copy"><span class="eyebrow">YOUR STILLWELL PROFILE</span><h2>${esc(name)}</h2><span class="profile-role">${icon("user")} ${esc(role)}</span></div></div><div class="profile-editor"><div class="profile-section-heading">${icon("user")}<div><h2>Personal details</h2><p>Choose how your name appears in your space.</p></div></div><form id="profile-form"><label class="field">Display name<input name="display_name" value="${esc(state.profile.display_name)}" required maxlength="60" autocomplete="nickname" aria-describedby="profile-name-help"></label><small id="profile-name-help">Use a name you feel comfortable with. You can change it anytime.</small><div class="profile-save-row"><button class="button">${icon("check")} Save changes</button></div></form></div><div class="profile-session">${!live ? `<label class="field">Explore a preview role<select id="preview-role">${["student", "counselor", "admin"].map((r) => `<option ${state.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></label><small>This preview switch does not grant live account permissions.</small>` : `<div><h3>Taking a break?</h3><p>Sign out of your account on this device.</p></div><button class="button outline" data-action="logout">${icon("logout")} Sign out</button>`}</div></section><div class="profile-data"><section class="card"><div class="profile-section-heading">${icon("shield")}<div><h2>Your data, in your hands</h2><p>Keep a copy of your personal records.</p></div></div><p class="muted">Export your visible records, or manage individual mood entries and reflections in their history views.</p><button class="button secondary" data-action="export">${icon("arrow")} Export my data</button><button class="text-link profile-privacy" data-page="privacy">Read the privacy policy ${icon("arrow")}</button></section><section class="card profile-delete"><div class="profile-section-heading">${icon("settings")}<div><h2>Account deletion</h2><p>A permanent change to your account.</p></div></div><p class="muted">Deleting your account removes your profile, moods, reflections, and appointment records from the active database. Backups follow the operator's configured retention.</p><button class="button outline" data-action="delete-account">Delete my account & records</button></section></div></div>`
+  );
 }
 function staffAuthView() {
   return `<main class="login-screen"><section class="auth-frame card"><aside class="login-welcome"><div class="brand"><span class="brandmark"><img src="/stillwell-logo.png?v=mascot1" alt="" width="38" height="38"></span>stillwell.</div><div class="login-art">${mascot(true)}</div><div class="welcome-copy"><span class="eyebrow">GUIDANCE TEAM</span><h2>A little care.<br>A real connection.</h2><p>A private workspace for counseling requests.</p></div></aside><section class="auth-panel"><div class="login-heading"><span class="eyebrow">AUTHORIZED STAFF ONLY</span><h1>Admin / Staff sign-in</h1><p>Sign in to manage counseling appointments.</p></div><form id="staff-auth-form"><label class="field">Username<input name="username" required maxlength="80" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="Your staff username"></label><label class="field">Password<input name="password" type="password" required maxlength="1024" autocomplete="current-password" placeholder="Your password"></label><button class="button login-submit">Sign in ${icon("arrow")}</button></form><p class="auth-alternate"><button type="button" data-auth-mode="login">Return to student sign-in</button></p><nav class="auth-public-links" aria-label="Public information"><button type="button" class="text-link" data-page="help">Need urgent help?</button><button type="button" class="text-link" data-page="privacy">Privacy policy</button><button type="button" class="text-link" data-page="terms">Terms of use</button></nav></section></section></main>`;
@@ -462,7 +527,10 @@ function pageView() {
 function openResource(id) {
   const r = [...resources, ...state.resources].find((x) => x.id === id);
   if (!r) return;
-  if (id === "contacts") { navigate("help"); return; }
+  if (id === "contacts") {
+    navigate("help");
+    return;
+  }
   window.ResourceActivities.open(r);
 }
 async function edge(body) {
@@ -513,7 +581,11 @@ document.addEventListener("click", async (e) => {
       return;
     }
     if (b.dataset.cancel || b.dataset.status) {
-      if (b.dataset.status && !confirm("Change this request to " + b.dataset.status + "?")) return;
+      if (
+        b.dataset.status &&
+        !confirm("Change this request to " + b.dataset.status + "?")
+      )
+        return;
       let id = b.dataset.cancel || b.dataset.id,
         status = b.dataset.cancel ? "cancelled" : b.dataset.status;
       if (live)
@@ -529,7 +601,12 @@ document.addEventListener("click", async (e) => {
     }
     if (b.dataset.topic !== undefined) {
       const i = Number(b.dataset.topic);
-      const topics = ["A breathing pause", "Study and rest balance", "Everyday self-care", "Reaching out for support"];
+      const topics = [
+        "A breathing pause",
+        "Study and rest balance",
+        "Everyday self-care",
+        "Reaching out for support",
+      ];
       await sendChat(topics[i], i);
       return;
     }
@@ -564,7 +641,14 @@ document.addEventListener("click", async (e) => {
         toast("Requests refreshed.");
         break;
       case "menu":
-        $(".sidebar").classList.toggle("open");
+        b.setAttribute(
+          "aria-expanded",
+          String($(".sidebar").classList.toggle("open")),
+        );
+        break;
+      case "close-menu":
+        $(".sidebar").classList.remove("open");
+        $('[data-action="menu"]').setAttribute("aria-expanded", "false");
         break;
       case "clear-chat":
         state.messages = [];
@@ -668,7 +752,10 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", async (e) => {
   if (e.target.id === "ai-consent") state.aiConsent = e.target.checked;
-  if (e.target.id === "staff-filter") { state.staffFilter = e.target.value; render(); }
+  if (e.target.id === "staff-filter") {
+    state.staffFilter = e.target.value;
+    render();
+  }
   try {
     if (e.target.id === "preview-role") {
       state.role = e.target.value;
@@ -703,9 +790,11 @@ document.addEventListener("submit", async (e) => {
 });
 async function sendChat(message, topic) {
   if (state.chatBusy) return;
-  if (!state.aiConsent) return toast("Please read and accept the AI disclosure first.");
+  if (!state.aiConsent)
+    return toast("Please read and accept the AI disclosure first.");
   message = message.trim();
-  if (!message || message.length > 2000) return toast("Write between 1 and 2,000 characters.");
+  if (!message || message.length > 2000)
+    return toast("Write between 1 and 2,000 characters.");
   if (topic === undefined && !state.aiPersonalChat) return;
   const epoch = state.chatEpoch;
   const history = state.messages.slice(-12);
@@ -719,10 +808,14 @@ async function sendChat(message, topic) {
         : { action: "topic", topic, consent: true };
       reply = (await edge(payload)).reply;
     } else {
-      reply = "Preview example: no AI request was sent. It can help to make the next step small: choose one manageable task, give yourself a short break, and notice what you need before continuing. What would make the next hour feel a little easier?";
+      reply =
+        "Preview example: no AI request was sent. It can help to make the next step small: choose one manageable task, give yourself a short break, and notice what you need before continuing. What would make the next hour feel a little easier?";
     }
     if (epoch !== state.chatEpoch) return;
-    state.messages.push({ role: "user", text: message }, { role: "assistant", text: reply });
+    state.messages.push(
+      { role: "user", text: message },
+      { role: "assistant", text: reply },
+    );
     state.chatDraft = "";
   } catch (err) {
     if (epoch === state.chatEpoch) toast(err.message);
@@ -752,12 +845,14 @@ document.addEventListener("submit", async (e) => {
         break;
       case "staff-auth-form": {
         const staffSession = await request("/api?kind=staff-login", {
-          method: "POST", body: JSON.stringify({ username: v.username, password: v.password }),
+          method: "POST",
+          body: JSON.stringify({ username: v.username, password: v.password }),
         });
         setSession(staffSession);
         try {
           await refresh();
-          if (!["counselor", "admin"].includes(state.role)) throw Error("Staff access is required.");
+          if (!["counselor", "admin"].includes(state.role))
+            throw Error("Staff access is required.");
         } catch (error) {
           setSession(null);
           throw error;
@@ -793,7 +888,9 @@ document.addEventListener("submit", async (e) => {
           });
           setSession(s);
           await refresh();
-          navigate(["counselor", "admin"].includes(state.role) ? "counselor" : "home");
+          navigate(
+            ["counselor", "admin"].includes(state.role) ? "counselor" : "home",
+          );
         }
         break;
       }
@@ -820,7 +917,8 @@ document.addEventListener("submit", async (e) => {
         }
         render();
         if (
-          fd.has("urgent") || /(kill myself|end my life|suicide|hurt myself|immediate danger)/i.test(
+          fd.has("urgent") ||
+          /(kill myself|end my life|suicide|hurt myself|immediate danger)/i.test(
             v.note,
           )
         ) {
@@ -915,8 +1013,15 @@ document.addEventListener("submit", async (e) => {
       case "resource-form":
       case "edit-resource-form": {
         let content = v.body.trim();
-        if (v.url) { if (!/^https:\/\//.test(v.url)) throw Error("Use an HTTPS resource link."); content += "\n\n" + v.url.trim(); }
-        if (content.length > 10000) throw Error("Resource content and link must fit within 10,000 characters.");
+        if (v.url) {
+          if (!/^https:\/\//.test(v.url))
+            throw Error("Use an HTTPS resource link.");
+          content += "\n\n" + v.url.trim();
+        }
+        if (content.length > 10000)
+          throw Error(
+            "Resource content and link must fit within 10,000 characters.",
+          );
         let row = { title: v.title, category: v.category, body: content };
         if (live) {
           await db("resources", f.dataset.id ? "?id=eq." + f.dataset.id : "", {
@@ -952,7 +1057,11 @@ document.addEventListener("submit", async (e) => {
             },
           );
           await refresh();
-        } else if (f.dataset.id) Object.assign(state.assessments.find(a=>a.id===f.dataset.id),row);
+        } else if (f.dataset.id)
+          Object.assign(
+            state.assessments.find((a) => a.id === f.dataset.id),
+            row,
+          );
         else state.assessments.push({ ...row, id: crypto.randomUUID() });
         render();
         toast("Template saved.");
@@ -980,15 +1089,25 @@ async function init() {
       if (response.ok) state.publicConfig = await response.json();
     } else {
       const response = await fetch("assessments.json");
-      if (response.ok) state.assessments = (await response.json()).map((a,i)=>({...a,id:"preview-"+i}));
+      if (response.ok)
+        state.assessments = (await response.json()).map((a, i) => ({
+          ...a,
+          id: "preview-" + i,
+        }));
     }
   } catch {}
-  if (location.hash === "#staff") { authMode = "staff"; state.page = "counselor"; }
-  if (["#help", "#privacy", "#terms"].includes(location.hash)) state.page = location.hash.slice(1);
+  if (location.hash === "#staff") {
+    authMode = "staff";
+    state.page = "counselor";
+  }
+  if (["#help", "#privacy", "#terms"].includes(location.hash))
+    state.page = location.hash.slice(1);
   if (live) {
     try {
       const response = await fetch("/api?kind=ai-config");
-      if (response.ok) state.aiPersonalChat = (await response.json()).personalChatEnabled === true;
+      if (response.ok)
+        state.aiPersonalChat =
+          (await response.json()).personalChatEnabled === true;
     } catch {}
   }
   const hash = new URLSearchParams(location.hash.slice(1));

@@ -2,8 +2,18 @@
   "name": "Stillwell | A Little Space for You",
   "short_name": "Stillwell",
   "icons": [
-    {"src": "/android-chrome-192x192.png?v=mascot1", "sizes": "192x192", "type": "image/png", "purpose": "any"},
-    {"src": "/android-chrome-512x512.png?v=mascot1", "sizes": "512x512", "type": "image/png", "purpose": "any"}
+    {
+      "src": "/android-chrome-192x192.png?v=mascot1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png?v=mascot1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
   ],
   "theme_color": "#7c75c9",
   "background_color": "#f7f7fd",
