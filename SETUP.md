@@ -13,6 +13,33 @@ The application includes registration, email confirmation, login, refresh tokens
 3. Run `vercel dev` and open the local URL it prints. This runs both the static site and the Python Function locally. Do not use `python -m http.server`; it cannot serve the API routes.
 4. Vercel deploys the contents of `dist/` as the website and `api/index.py` as a serverless function. Supabase Auth remains hosted by Supabase; authenticated database requests and the optional Gemini support call use the Vercel API.
 
+## 1A. Use StillWell on another computer (including a school PC)
+
+**Important:** do not use the VS Code Live Server extension or `python -m http.server` for this project. They serve only the static `dist/` files and do not run the `/api` Python Function. That is a common reason the browser reports **“Failed to fetch”** when a page tries to use a backend route. Start the project with Vercel's local development server instead.
+
+### One-time setup on each computer
+
+1. Install Git, Node.js (LTS), Python 3.12 or newer, and the Vercel CLI.
+2. Open VS Code, choose **Terminal → New Terminal**, then clone the repository if it is not already on that computer:
+   `git clone https://github.com/tiffanykaye28/stillwell.git`
+3. Open the cloned `stillwell` folder in VS Code.
+4. In the terminal, run `vercel login`, then `vercel link` and select the existing StillWell Vercel project. This requires an authorized Vercel account with access to the project.
+5. Pull the permitted project environment variables into a local ignored file with `vercel env pull .env.local`. If the account cannot access the Vercel project, ask the project owner to grant access; do not copy secrets into Git or send them in chat.
+6. Run `vercel dev`. Open the local URL printed by the CLI (normally `http://localhost:3000`). The VS Code Run and Debug profile **StillWell (Vercel local)** starts this task for you.
+7. To bring the school computer up to date later, use `git pull` while on the intended branch.
+
+### If you only need to demonstrate the deployed site
+
+Open the deployed StillWell website in a browser. You do not need VS Code, Python, Node.js, Vercel CLI, or a local `.env.local` file just to use the hosted website. Use VS Code only when editing or testing code.
+
+### Common “Failed to fetch” checks
+
+- If using Live Server or `python -m http.server`, stop it and start `vercel dev` instead.
+- Confirm the browser is using the URL printed by `vercel dev`, not the Live Server port (often 5500) or the old VS Code launch port (8080).
+- Check that `/api?kind=health` opens on the same local origin. If it does not, the Vercel Function is not running.
+- If the health route works but login/data requests fail, check that `.env.local` was pulled from the correct Vercel project and contains the required server-side Supabase settings.
+- Never commit, upload, or share `.env.local`, Supabase secret/service-role keys, or Gemini keys. The public browser publishable key in `dist/config.js` is not a substitute for the private server settings.
+
 ## 2. Start Supabase
 
 1. Open the Supabase project whose URL is configured in the site. The supplied migration is intended only for a new, empty project dedicated to Stillwell. Do not run it against an existing application or a project containing data before reviewing the SQL and making a backup.
