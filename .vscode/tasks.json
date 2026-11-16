@@ -1,0 +1,25 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "StillWell: start Vercel dev",
+      "type": "shell",
+      "command": "vercel",
+      "args": ["dev"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "stillwell",
+        "pattern": [
+          {
+            "regexp": "^$"
+          }
+        ],
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*",
+          "endsPattern": "Ready! Available at.*"
+        }
+      }
+    }
+  ]
+}
