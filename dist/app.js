@@ -67,6 +67,10 @@ let state = {
   role: "student",
   profile: { display_name: "there" },
   moods: [],
+  courses: [],
+  courseLessons: [],
+  courseProgress: [],
+  selectedCourseId: "",
   appointments: [],
   assessments: [],
   resources: [],
@@ -212,12 +216,15 @@ async function refresh() {
   let p = await db("profiles", "?id=eq." + session.user.id);
   state.profile = p[0] || { display_name: "there" };
   state.role = state.profile.role || "student";
-  let [m, a, r, t, res] = await Promise.all([
+  let [m, a, r, t, res, courses, courseLessons, courseProgress] = await Promise.all([
     db("mood_entries", "?order=entry_date.desc"),
     db("appointments", "?order=requested_at.desc"),
     db("resources", "?order=created_at.desc"),
     db("assessments", "?order=created_at"),
     db("assessment_results", "?order=created_at.desc"),
+    db("courses", state.role === "admin" ? "?order=created_at.desc" : "?published=eq.true&order=created_at.desc"),
+    db("course_lessons", "?order=sort_order.asc"),
+    db("course_progress", "?order=completed_at.desc"),
   ]);
   Object.assign(state, {
     moods: m,
@@ -225,6 +232,9 @@ async function refresh() {
     resources: r,
     assessments: t,
     results: res,
+    courses,
+    courseLessons,
+    courseProgress,
   });
   if (state.role === "admin")
     state.users = await db("profiles", "?order=created_at.desc");
@@ -300,7 +310,7 @@ function render() {
   }
   let staff = state.role !== "student";
   $("#app").innerHTML =
-    `<div class="shell"><aside class="sidebar" id="navigation-sidebar"><div class="brand"><span class="brandmark"><img src="/stillwell-logo.png?v=mascot1" alt="" width="38" height="38"></span>stillwell<span style="color:#a69dce">.</span></div><div class="side-label">YOUR WELLBEING SPACE</div>${nav("home", "home", "Overview")}${nav("mood", "heart", "Mood check-in")}${nav("assessment", "check", "Self-assessment")}${nav("chat", "chat", "Talk with Lumi")}${nav("resources", "book", "Resource library")}${nav("appointments", "calendar", "Counseling")}${staff ? nav("counselor", "user", "Counselor workspace") : ""}${state.role === "admin" ? nav("admin", "settings", "Administration") : ""}<div class="side-bottom"><div class="side-help">${icon("help")}<h3>You don’t have to do it alone.</h3><p>Find a person to talk to when things feel difficult.</p><button class="button secondary" data-page="help">Find support ${icon("arrow")}</button></div>${nav("profile", "user", "My profile")}<button class="nav help-button" data-page="help">${icon("shield")}Need urgent help?</button></div></aside><button class="sidebar-backdrop" data-action="close-menu" aria-label="Close navigation" tabindex="-1"></button><div><header class="topbar"><button class="menu-button" data-action="menu" aria-label="Open navigation" aria-controls="navigation-sidebar" aria-expanded="false">${icon("settings")}</button><span class="mobile-brand">stillwell.</span><form id="search" class="search">${icon("search")}<input name="q" aria-label="Search resources" placeholder="Search your wellbeing resources..."></form><div class="top-right">${!live ? '<span class="chip">Interactive preview</span>' : ""}<button data-page="help" aria-label="Support">${icon("help")}</button><span class="avatar">${esc(state.profile.display_name?.[0]?.toUpperCase() || "S")}</span><span class="name">${esc(state.profile.display_name === "there" ? "Your space" : state.profile.display_name)}<br><small>${state.role === "student" ? "Student" : state.role}</small></span></div></header><main class="workspace">${!live ? '<div class="notice">Preview mode · Try every flow with sample data. Entries stay in memory and clear on refresh. Configure Supabase to enable real accounts.</div>' : ""}${pageView()}<footer><span>Stillwell · Small steps. A little more space.</span><span>${live && !session ? '<button data-page="auth">Back to log in</button> · ' : ""}<button data-page="privacy">Privacy policy</button> · <button data-page="terms">Terms of use</button> · <button data-page="help">Get support</button></span></footer></main></div></div>`;
+    `<div class="shell"><aside class="sidebar" id="navigation-sidebar"><div class="brand"><span class="brandmark"><img src="/stillwell-logo.png?v=mascot1" alt="" width="38" height="38"></span>stillwell<span style="color:#a69dce">.</span></div><div class="side-label">YOUR WELLBEING SPACE</div>${nav("home", "home", "Overview")}${nav("mood", "heart", "Mood check-in")}${nav("assessment", "check", "Self-assessment")}${nav("courses", "book", "Learning courses")}${nav("chat", "chat", "Talk with Lumi")}${nav("resources", "book", "Resource library")}${nav("appointments", "calendar", "Counseling")}${staff ? nav("counselor", "user", "Counselor workspace") : ""}${state.role === "admin" ? nav("admin", "settings", "Administration") : ""}<div class="side-bottom"><div class="side-help">${icon("help")}<h3>You don’t have to do it alone.</h3><p>Find a person to talk to when things feel difficult.</p><button class="button secondary" data-page="help">Find support ${icon("arrow")}</button></div>${nav("profile", "user", "My profile")}<button class="nav help-button" data-page="help">${icon("shield")}Need urgent help?</button></div></aside><button class="sidebar-backdrop" data-action="close-menu" aria-label="Close navigation" tabindex="-1"></button><div><header class="topbar"><button class="menu-button" data-action="menu" aria-label="Open navigation" aria-controls="navigation-sidebar" aria-expanded="false">${icon("settings")}</button><span class="mobile-brand">stillwell.</span><form id="search" class="search">${icon("search")}<input name="q" aria-label="Search resources" placeholder="Search your wellbeing resources..."></form><div class="top-right">${!live ? '<span class="chip">Interactive preview</span>' : ""}<button data-page="help" aria-label="Support">${icon("help")}</button><span class="avatar">${esc(state.profile.display_name?.[0]?.toUpperCase() || "S")}</span><span class="name">${esc(state.profile.display_name === "there" ? "Your space" : state.profile.display_name)}<br><small>${state.role === "student" ? "Student" : state.role}</small></span></div></header><main class="workspace">${!live ? '<div class="notice">Preview mode · Try every flow with sample data. Entries stay in memory and clear on refresh. Configure Supabase to enable real accounts.</div>' : ""}${pageView()}<footer><span>Stillwell · Small steps. A little more space.</span><span>${live && !session ? '<button data-page="auth">Back to log in</button> · ' : ""}<button data-page="privacy">Privacy policy</button> · <button data-page="terms">Terms of use</button> · <button data-page="help">Get support</button></span></footer></main></div></div>`;
   window.mountAppearance();
 }
 function heading(k, t, sub = "") {
@@ -381,6 +391,33 @@ function resourcesView(query = "") {
     `<div class="resource-grid">${rr.map((r, i) => `<article class="card"><div class="resource-cover c${i % 3}">${icon(r.icon || "book")}</div><span class="eyebrow">${esc(r.category)}</span><h2 style="margin:12px 0">${esc(r.title)}</h2><p class="muted">${esc(r.body.slice(0, 100))}…</p><button class="text-link" data-resource="${esc(r.id)}">${{ breathing: "Start breathing guide", study: "Open study timer", grounding: "Try grounding", support: "Build a message", rest: "Make a rest plan", external: "Browse materials" }[r.id] || "Open resource"} ${icon("arrow")}</button></article>`).join("") || "<p>No resources matched your search.</p>"}</div>`
   );
 }
+
+function coursesView() {
+  const course = state.courses.find((item) => item.id === state.selectedCourseId);
+  const lessons = course ? state.courseLessons.filter((lesson) => lesson.course_id === course.id) : [];
+  const completed = new Set(state.courseProgress.map((item) => item.lesson_id));
+  if (course) {
+    const done = lessons.filter((lesson) => completed.has(lesson.id)).length;
+    const percent = lessons.length ? Math.round(done / lessons.length * 100) : 0;
+    return heading("YOUR LEARNING SPACE", esc(course.title), esc(course.description)) +
+      \`<section class="card course-detail"><button class="text-link" data-course-back>← All courses</button><div class="course-meta"><span class="chip">\${esc(course.category)}</span><span class="muted">\${esc(course.level || "Self-paced")} · \${Number(course.duration_minutes || 0)} min</span></div><div class="course-progress"><div class="course-progress-fill" style="width:\${percent}%"></div></div><p class="muted">\${done} of \${lessons.length} lessons completed · \${percent}%</p><div class="lesson-list">\${lessons.map((lesson, index) => \`<article class="lesson-card"><div class="row spread"><h2>\${index + 1}. \${esc(lesson.title)}</h2><span class="chip">\${completed.has(lesson.id) ? "Completed" : "Not started"}</span></div><p>\${esc(lesson.content)}</p>\${lesson.video_url ? \`<p><a href="\${esc(lesson.video_url)}" target="_blank" rel="noopener noreferrer">Watch lesson video ↗</a></p>\` : ""}\${completed.has(lesson.id) ? "" : \`<button class="button secondary" data-lesson-complete="\${esc(lesson.id)}">Mark lesson complete</button>\`}</article>\`).join("") || '<p class="empty">Lessons for this course will be added soon.</p>'}</div><p class="notice">These materials are for general education and self-reflection. They are not a diagnosis or a replacement for professional support.</p></section>\`;
+  }
+  const progressByCourse = new Map();
+  for (const item of state.courseProgress) {
+    const lesson = state.courseLessons.find((entry) => entry.id === item.lesson_id);
+    if (lesson) progressByCourse.set(lesson.course_id, (progressByCourse.get(lesson.course_id) || 0) + 1);
+  }
+  return heading("LEARN AT YOUR OWN PACE", "Mental wellness courses", "Short learning paths with practical lessons you can complete in your own time.") +
+    \`<div class="course-grid">\${state.courses.filter((item) => item.published).map((item) => {
+      const count = state.courseLessons.filter((lesson) => lesson.course_id === item.id).length;
+      const done = Math.min(count, progressByCourse.get(item.id) || 0);
+      return \`<article class="card course-card"><span class="eyebrow">\${esc(item.category)}</span><h2>\${esc(item.title)}</h2><p>\${esc(item.description)}</p><div class="course-meta"><span>\${esc(item.level || "Self-paced")}</span><span>\${Number(item.duration_minutes || 0)} min</span><span>\${count} lessons</span></div><div class="course-progress"><div class="course-progress-fill" style="width:\${count ? Math.round(done / count * 100) : 0}%"></div></div><small>\${done} of \${count} lessons completed</small><button class="button" data-course-open="\${esc(item.id)}">Open course \${icon("arrow")}</button></article>\`;
+    }).join("") || '<section class="card empty"><h2>No courses published yet</h2><p>Your learning courses will appear here when they are published by the StillWell administrator.</p></section>'}</div>\`;
+}
+function courseManagementView() {
+  return \`<section class="card course-management"><h2>Learning course management</h2><p class="muted">Create educational courses and add lessons. Courses remain hidden from students until published.</p><form id="course-form" class="course-form"><label class="field">Course title<input name="title" maxlength="120" required></label><label class="field">Category<input name="category" maxlength="60" placeholder="e.g. Student wellbeing" required></label><label class="field">Short description<textarea name="description" maxlength="1200" rows="3" required></textarea></label><div class="two-col"><label class="field">Estimated duration (minutes)<input name="duration_minutes" type="number" min="1" max="600" value="30" required></label><label class="field">Level<select name="level"><option>Beginner</option><option>Intermediate</option><option>All levels</option></select></label></div><button class="button">Create course</button></form><div class="course-admin-list">\${state.courses.map((course) => \`<article class="lesson-card"><div class="row spread"><h3>\${esc(course.title)}</h3><span class="chip">\${course.published ? "Published" : "Draft"}</span></div><p class="muted">\${esc(course.description)}</p><form id="lesson-form" data-course-id="\${esc(course.id)}" class="course-form"><h3>Add a lesson</h3><label class="field">Lesson title<input name="title" maxlength="120" required></label><label class="field">Lesson content<textarea name="content" maxlength="10000" rows="4" required></textarea></label><label class="field">Optional video URL (HTTPS)<input name="video_url" type="url" placeholder="https://..."></label><label class="field">Lesson order<input name="sort_order" type="number" min="1" max="100" value="\${state.courseLessons.filter((lesson) => lesson.course_id === course.id).length + 1}" required></label><button class="button secondary">Add lesson</button></form><div class="row spread"><small>\${state.courseLessons.filter((lesson) => lesson.course_id === course.id).length} lessons</small><button class="text-link" data-course-publish="\${esc(course.id)}" data-published="\${course.published ? "true" : "false"}">\${course.published ? "Unpublish course" : "Publish course"}</button></div></article>\`).join("") || '<p class="empty">No courses created yet. Add your first course above.</p>'}</div></section>\`;
+}
+
 function appointmentsView() {
   return (
     heading(
@@ -441,7 +478,7 @@ function adminView() {
       "A responsible support space",
       "Manage access and educational content without reading private reflections.",
     ) +
-    `${Wellbeing.reports()}<div class="tiles"><div class="card"><small>Registered profiles</small><div class="stat">${live ? state.users.length : "—"}</div></div><div class="card"><small>Published resources</small><div class="stat">${state.resources.length + resources.length}</div></div><div class="card"><small>Reflection templates</small><div class="stat">${state.assessments.length || 1}</div></div></div><section class="card" style="margin-top:22px"><h2>Accounts & counselor access</h2>${!live ? '<div class="notice">Preview: real account management becomes available after Supabase setup. Role changes require an authenticated administrator.</div>' : ""}<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Manage</th></tr></thead><tbody>${state.users.map((u) => `<tr><td>${esc(u.display_name)}</td><td>${esc(u.role)}</td><td><select ${u.id === session?.user?.id ? "disabled" : ""} data-user-role="${u.id}" aria-label="Role for ${esc(u.display_name)}">${["student", "counselor", "admin"].map((r) => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></section><div class="two-col" style="margin-top:22px"><section class="card"><h2>Resources</h2>${resourceForm()}${resourceManage()}</section><section class="card">${Wellbeing.templatesEditor()}</section></div>`
+    `${Wellbeing.reports()}<div class="tiles"><div class="card"><small>Registered profiles</small><div class="stat">${live ? state.users.length : "—"}</div></div><div class="card"><small>Published resources</small><div class="stat">${state.resources.length + resources.length}</div></div><div class="card"><small>Reflection templates</small><div class="stat">${state.assessments.length || 1}</div></div></div><section class="card" style="margin-top:22px"><h2>Accounts & counselor access</h2>${!live ? '<div class="notice">Preview: real account management becomes available after Supabase setup. Role changes require an authenticated administrator.</div>' : ""}<div class="table-wrap"><table><thead><tr><th>Name</th><th>Role</th><th>Manage</th></tr></thead><tbody>${state.users.map((u) => `<tr><td>${esc(u.display_name)}</td><td>${esc(u.role)}</td><td><select ${u.id === session?.user?.id ? "disabled" : ""} data-user-role="${u.id}" aria-label="Role for ${esc(u.display_name)}">${["student", "counselor", "admin"].map((r) => `<option ${u.role === r ? "selected" : ""}>${r}</option>`).join("")}</select></td></tr>`).join("")}</tbody></table></div></section><div class="two-col" style="margin-top:22px"><section class="card"><h2>Resources</h2>${resourceForm()}${resourceManage()}</section><section class="card">${Wellbeing.templatesEditor()}</section></div>${courseManagementView()}`
   );
 }
 function profileView() {
@@ -501,6 +538,8 @@ function pageView() {
       return moodView();
     case "assessment":
       return assessmentView();
+    case "courses":
+      return coursesView();
     case "chat":
       return chatView();
     case "resources":
@@ -556,6 +595,47 @@ document.addEventListener("click", async (e) => {
     }
     if (b.dataset.resource) {
       openResource(b.dataset.resource);
+      return;
+    }
+    if (b.dataset.courseOpen) {
+      state.selectedCourseId = b.dataset.courseOpen;
+      navigate("courses");
+      return;
+    }
+    if (b.hasAttribute("data-course-back")) {
+      state.selectedCourseId = "";
+      render();
+      return;
+    }
+    if (b.dataset.lessonComplete) {
+      const lessonId = b.dataset.lessonComplete;
+      if (live) {
+        await db("course_progress", "", {
+          method: "POST",
+          headers: { Prefer: "resolution=ignore-duplicates" },
+          body: JSON.stringify({ user_id: session.user.id, lesson_id: lessonId }),
+        });
+        await refresh();
+      } else if (!state.courseProgress.some((item) => item.lesson_id === lessonId)) {
+        state.courseProgress.push({ lesson_id: lessonId, completed_at: new Date().toISOString() });
+      }
+      render();
+      toast("Lesson marked as complete.");
+      return;
+    }
+    if (b.dataset.coursePublish) {
+      const course = state.courses.find((item) => item.id === b.dataset.coursePublish);
+      if (!course) return;
+      const published = b.dataset.published !== "true";
+      if (live) {
+        await db("courses", "?id=eq." + encodeURIComponent(course.id), {
+          method: "PATCH",
+          body: JSON.stringify({ published }),
+        });
+        await refresh();
+      } else course.published = published;
+      render();
+      toast(published ? "Course published." : "Course unpublished.");
       return;
     }
     if (b.dataset.deleteMood) {
@@ -1039,6 +1119,30 @@ document.addEventListener("submit", async (e) => {
         render();
         toast("Resource saved.");
         break;
+      }
+      case "course-form": {
+        const row = {
+          title: v.title.trim(), category: v.category.trim(), description: v.description.trim(),
+          duration_minutes: Number(v.duration_minutes), level: v.level, published: false,
+          created_by: session?.user?.id || null,
+        };
+        if (!row.title || !row.category || !row.description || row.duration_minutes < 1 || row.duration_minutes > 600)
+          throw Error("Complete the course details using the allowed limits.");
+        if (live) { await db("courses", "", { method: "POST", body: JSON.stringify(row) }); await refresh(); }
+        else state.courses.push({ ...row, id: crypto.randomUUID(), created_at: new Date().toISOString() });
+        render(); toast("Course created as a draft."); break;
+      }
+      case "lesson-form": {
+        const row = {
+          course_id: f.dataset.courseId, title: v.title.trim(), content: v.content.trim(),
+          video_url: v.video_url.trim() || null, sort_order: Number(v.sort_order),
+        };
+        if (row.video_url && !/^https:\/\//i.test(row.video_url)) throw Error("Video links must use HTTPS.");
+        if (!row.title || !row.content || row.sort_order < 1 || row.sort_order > 100)
+          throw Error("Complete the lesson details using the allowed limits.");
+        if (live) { await db("course_lessons", "", { method: "POST", body: JSON.stringify(row) }); await refresh(); }
+        else state.courseLessons.push({ ...row, id: crypto.randomUUID() });
+        render(); toast("Lesson added."); break;
       }
       case "template-form": {
         let qs = v.questions
