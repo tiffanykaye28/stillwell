@@ -1144,3 +1144,21 @@ th {
     transition: none !important;
   }
 }
+
+.course-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px}
+.course-card{display:flex;flex-direction:column;align-items:flex-start;gap:10px}
+.course-card h2{margin:4px 0}
+.course-card p{flex:1;color:var(--muted)}
+.course-meta{display:flex;flex-wrap:wrap;gap:12px;color:var(--muted);font-size:12px;margin:12px 0}
+.course-progress{height:8px;background:#eeedf5;border-radius:99px;overflow:hidden;margin:12px 0 5px;width:100%}
+.course-progress-fill{height:100%;background:var(--green);border-radius:99px;transition:width .2s ease}
+.course-detail{max-width:900px}
+.lesson-list,.course-admin-list{display:grid;gap:14px;margin-top:20px}
+.lesson-card{border:1px solid var(--border);border-radius:12px;padding:18px;background:#fff}
+.lesson-card h2,.lesson-card h3{margin:0}
+.lesson-card p{white-space:pre-line}
+.course-form{display:grid;gap:12px;margin:18px 0 24px}
+.course-form .field{display:grid;gap:7px;font-size:12px;color:var(--muted)}
+.course-form input,.course-form textarea,.course-form select{width:100%;border:1px solid var(--border);border-radius:8px;padding:10px;background:#fff;color:var(--ink)}
+.course-management{margin-top:24px}
+@media(max-width:760px){.course-meta{gap:8px}.lesson-card{padding:15px}}
