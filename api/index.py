@@ -23,6 +23,9 @@ TABLES = {
     "assessment_results",
     "appointments",
     "resources",
+    "courses",
+    "course_lessons",
+    "course_progress",
 }
 RPCS = {
     "admin_set_role",
